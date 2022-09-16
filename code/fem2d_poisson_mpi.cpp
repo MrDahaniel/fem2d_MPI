@@ -9,6 +9,7 @@
 
 #define X_TAG 10
 #define Y_TAG 20
+#define ELEMENT_TAG 30
 
 #define LOWER_TAG 100
 #define UPPER_TAG 200
@@ -62,6 +63,7 @@ int main(int argc, char* argsv[]) {
     // double* y = new double[node_num];
 
     int element_num = 2 * (nx - 1) * (ny - 1);
+    int* element_node = new int[3 * element_num];
 
     double* a = new double[node_num * node_num];
     double* b = new double[node_num];
@@ -96,7 +98,6 @@ int main(int argc, char* argsv[]) {
             cout << "   Number of elements =       " << element_num << "\n";
         }
 
-        int* element_node = new int[3 * element_num];
 
         double* x = new double[node_num];
         double* y = new double[node_num];
@@ -148,7 +149,6 @@ int main(int argc, char* argsv[]) {
 
 
         int k = 0;
-
         for (j = 1; j <= ny - 1; j++) {
             for (i = 1; i <= nx - 1; i++) {
                 element_node[0 + k * 3] = i + (j - 1) * nx - 1;
@@ -163,80 +163,27 @@ int main(int argc, char* argsv[]) {
             }
         }
 
-        {
-            //
-            //  Assemble the coefficient matrix A and the right-hand side B of the
-            //  finite element equations, ignoring boundary conditions.
-            //
-
+        for (i = 0; i < node_num; i++) {
+            b[i] = 0.0;
+        }
+        for (j = 0; j < node_num; j++) {
             for (i = 0; i < node_num; i++) {
-                b[i] = 0.0;
+                a[i + j * node_num] = 0.0;
             }
-            for (j = 0; j < node_num; j++) {
-                for (i = 0; i < node_num; i++) {
-                    a[i + j * node_num] = 0.0;
-                }
-            }
+        }
 
-            for (e = 0; e < element_num; e++) {
-                i1 = element_node[0 + e * 3];
-                i2 = element_node[1 + e * 3];
-                i3 = element_node[2 + e * 3];
-                area = 0.5 *
-                    (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
-                //
-                //  Consider each quadrature point.
-                //  Here, we use the midside nodes as quadrature points.
-                //
-                for (q1 = 0; q1 < 3; q1++) {
-                    q2 = (q1 + 1) % 3;
+        int* element_splits = evenly_divide(element_num, size - 1);
 
-                    nq1 = element_node[q1 + e * 3];
-                    nq2 = element_node[q2 + e * 3];
+        for (int rank_id = 1; rank_id < size; rank_id++) {
+            // Sending the element_num range
+            MPI_Send(&element_splits[rank_id - 1], 1, MPI_INT, rank_id, LOWER_TAG, MPI_COMM_WORLD);
+            MPI_Send(&element_splits[rank_id], 1, MPI_INT, rank_id, UPPER_TAG, MPI_COMM_WORLD);
+            MPI_Send(element_node, 3 * element_num, MPI_INT, rank_id, ELEMENT_TAG, MPI_COMM_WORLD);
+        }
 
-                    xq = 0.5 * (x[nq1] + x[nq2]);
-                    yq = 0.5 * (y[nq1] + y[nq2]);
-                    wq = 1.0 / 3.0;
-                    //
-                    //  Consider each test function in the element.
-                    //
-                    for (ti1 = 0; ti1 < 3; ti1++) {
-                        ti2 = (ti1 + 1) % 3;
-                        ti3 = (ti1 + 2) % 3;
+        {
 
-                        nti1 = element_node[ti1 + e * 3];
-                        nti2 = element_node[ti2 + e * 3];
-                        nti3 = element_node[ti3 + e * 3];
 
-                        qi = 0.5 * ((x[nti3] - x[nti2]) * (yq - y[nti2]) - (y[nti3] - y[nti2]) * (xq - x[nti2])) / area;
-                        dqidx = -0.5 * (y[nti3] - y[nti2]) / area;
-                        dqidy = 0.5 * (x[nti3] - x[nti2]) / area;
-
-                        rhs = 2.0 * pi * pi * sin(pi * xq) * sin(pi * yq);
-
-                        b[nti1] = b[nti1] + area * wq * rhs * qi;
-                        //
-                        //  Consider each basis function in the element.
-                        //
-                        for (tj1 = 0; tj1 < 3; tj1++) {
-                            tj2 = (tj1 + 1) % 3;
-                            tj3 = (tj1 + 2) % 3;
-
-                            ntj1 = element_node[tj1 + e * 3];
-                            ntj2 = element_node[tj2 + e * 3];
-                            ntj3 = element_node[tj3 + e * 3];
-
-                            //        qj = 0.5 * (
-                            //            ( x[ntj3] - x[ntj2] ) * ( yq - y[ntj2] )
-                            //          - ( y[ntj3] - y[ntj2] ) * ( xq - x[ntj2] ) ) / area;
-                            dqjdx = -0.5 * (y[ntj3] - y[ntj2]) / area;
-                            dqjdy = 0.5 * (x[ntj3] - x[ntj2]) / area;
-
-                            a[nti1 + ntj1 * node_num] = a[nti1 + ntj1 * node_num] + area * wq * (dqidx * dqjdx + dqidy * dqjdy);
-                        }
-                    }
-                }
-            }
             //
             //  BOUNDARY CONDITIONS
             //
@@ -347,6 +294,74 @@ int main(int argc, char* argsv[]) {
             // And delete x and y
             delete[] x;
             delete[] y;
+        }
+
+        {
+            int elnum_lower, elnum_upper;
+
+            MPI_Recv(&elnum_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(&elnum_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(element_node, 3 * element_num, MPI_INT, ORCHESTRATOR, ELEMENT_TAG, MPI_COMM_WORLD, &status);
+
+            for (e = 0; e < element_num; e++) {
+                i1 = element_node[0 + e * 3];
+                i2 = element_node[1 + e * 3];
+                i3 = element_node[2 + e * 3];
+                area = 0.5 *
+                    (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
+                //
+                //  Consider each quadrature point.
+                //  Here, we use the midside nodes as quadrature points.
+                //
+                for (q1 = 0; q1 < 3; q1++) {
+                    q2 = (q1 + 1) % 3;
+
+                    nq1 = element_node[q1 + e * 3];
+                    nq2 = element_node[q2 + e * 3];
+
+                    xq = 0.5 * (x[nq1] + x[nq2]);
+                    yq = 0.5 * (y[nq1] + y[nq2]);
+                    wq = 1.0 / 3.0;
+                    //
+                    //  Consider each test function in the element.
+                    //
+                    for (ti1 = 0; ti1 < 3; ti1++) {
+                        ti2 = (ti1 + 1) % 3;
+                        ti3 = (ti1 + 2) % 3;
+
+                        nti1 = element_node[ti1 + e * 3];
+                        nti2 = element_node[ti2 + e * 3];
+                        nti3 = element_node[ti3 + e * 3];
+
+                        qi = 0.5 * ((x[nti3] - x[nti2]) * (yq - y[nti2]) - (y[nti3] - y[nti2]) * (xq - x[nti2])) / area;
+                        dqidx = -0.5 * (y[nti3] - y[nti2]) / area;
+                        dqidy = 0.5 * (x[nti3] - x[nti2]) / area;
+
+                        rhs = 2.0 * pi * pi * sin(pi * xq) * sin(pi * yq);
+
+                        b[nti1] = b[nti1] + area * wq * rhs * qi;
+                        //
+                        //  Consider each basis function in the element.
+                        //
+                        for (tj1 = 0; tj1 < 3; tj1++) {
+                            tj2 = (tj1 + 1) % 3;
+                            tj3 = (tj1 + 2) % 3;
+
+                            ntj1 = element_node[tj1 + e * 3];
+                            ntj2 = element_node[tj2 + e * 3];
+                            ntj3 = element_node[tj3 + e * 3];
+
+                            //        qj = 0.5 * (
+                            //            ( x[ntj3] - x[ntj2] ) * ( yq - y[ntj2] )
+                            //          - ( y[ntj3] - y[ntj2] ) * ( xq - x[ntj2] ) ) / area;
+                            dqjdx = -0.5 * (y[ntj3] - y[ntj2]) / area;
+                            dqjdy = 0.5 * (x[ntj3] - x[ntj2]) / area;
+
+                            a[nti1 + ntj1 * node_num] = a[nti1 + ntj1 * node_num] + area * wq * (dqidx * dqjdx + dqidy * dqjdy);
+                        }
+                    }
+                }
+            }
         }
 
     }
