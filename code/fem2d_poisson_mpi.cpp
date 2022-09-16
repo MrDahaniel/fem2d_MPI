@@ -60,11 +60,10 @@ int main(int argc, char* argsv[]) {
     const double yt = 1.0;
 
     const int node_num = nx * ny;
+    const int element_num = 2 * (nx - 1) * (ny - 1);
 
     // double* x = new double[node_num];
     // double* y = new double[node_num];
-
-    int element_num = 2 * (nx - 1) * (ny - 1);
 
     if (rank == 0) {
         {
@@ -135,7 +134,11 @@ int main(int argc, char* argsv[]) {
             delete[] partial_y;
         }
 
+        delete[] node_splits;
+
         k = 0;
+
+        printf("here");
 
         double* a = new double[node_num * node_num];
         double* b = new double[node_num];
@@ -154,7 +157,7 @@ int main(int argc, char* argsv[]) {
             }
         }
 
-        for (int rank_id = 1; rank_id < size; i++) {
+        for (int rank_id = 1; rank_id < size; rank_id++) {
             MPI_Send(x, node_num, MPI_INT, rank_id, X_TAG, MPI_COMM_WORLD);
             MPI_Send(y, node_num, MPI_INT, rank_id, Y_TAG, MPI_COMM_WORLD);
             MPI_Send(element_node, 3 * element_num, MPI_INT, rank_id, ELEMENT_TAG, MPI_COMM_WORLD);
@@ -325,6 +328,7 @@ int main(int argc, char* argsv[]) {
         MPI_Recv(element_node, 3 * element_num, MPI_INT, ORCHESTRATOR, ELEMENT_TAG, MPI_COMM_WORLD, &status);
 
         int* element_splits = evenly_divide(element_num, size - 1);
+
         int lower = element_splits[rank - 1];
         int upper = element_splits[rank];
         int inner_element_num = upper - lower;
