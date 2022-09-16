@@ -7,9 +7,12 @@
 
 #define ORCHESTRATOR 0
 
+#define NUMBER_TAG 5
 #define X_TAG 10
 #define Y_TAG 20
 #define ELEMENT_TAG 30
+#define A_TAG 40
+#define B_TAG 50
 
 #define LOWER_TAG 100
 #define UPPER_TAG 200
@@ -33,8 +36,8 @@ int main(int argc, char* argsv[]) {
 
     const double pi = 3.141592653589793;
 
-    int nx = 15;
-    int ny = 10;
+    int nx = 5;
+    int ny = 5;
 
     double area;
 
@@ -65,8 +68,6 @@ int main(int argc, char* argsv[]) {
     int element_num = 2 * (nx - 1) * (ny - 1);
     int* element_node = new int[3 * element_num];
 
-    double* a = new double[node_num * node_num];
-    double* b = new double[node_num];
 
     if (rank == 0) {
         {
@@ -148,7 +149,7 @@ int main(int argc, char* argsv[]) {
         }
 
 
-        int k = 0;
+        k = 0;
         for (j = 1; j <= ny - 1; j++) {
             for (i = 1; i <= nx - 1; i++) {
                 element_node[0 + k * 3] = i + (j - 1) * nx - 1;
@@ -162,6 +163,9 @@ int main(int argc, char* argsv[]) {
                 k = k + 1;
             }
         }
+
+        double* a = new double[node_num * node_num];
+        double* b = new double[node_num];
 
         for (i = 0; i < node_num; i++) {
             b[i] = 0.0;
@@ -178,7 +182,37 @@ int main(int argc, char* argsv[]) {
             // Sending the element_num range
             MPI_Send(&element_splits[rank_id - 1], 1, MPI_INT, rank_id, LOWER_TAG, MPI_COMM_WORLD);
             MPI_Send(&element_splits[rank_id], 1, MPI_INT, rank_id, UPPER_TAG, MPI_COMM_WORLD);
+
             MPI_Send(element_node, 3 * element_num, MPI_INT, rank_id, ELEMENT_TAG, MPI_COMM_WORLD);
+
+            MPI_Send(x, node_num, MPI_DOUBLE, rank_id, X_TAG, MPI_COMM_WORLD);
+            MPI_Send(y, node_num, MPI_DOUBLE, rank_id, Y_TAG, MPI_COMM_WORLD);
+        }
+
+
+        for (int rank_id = 1; rank_id < size; rank_id++) {
+            int inner_node_num, inner_node_sq_num;
+
+            MPI_Recv(&inner_node_num, 1, MPI_INT, rank_id, NUMBER_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(&inner_node_sq_num, 1, MPI_INT, rank_id, NUMBER_TAG, MPI_COMM_WORLD, &status);
+
+            double* partial_b = new double[inner_node_num];
+            double* partial_a = new double[inner_node_sq_num];
+
+            MPI_Recv(partial_b, inner_node_num, MPI_DOUBLE, rank_id, B_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(partial_a, inner_node_sq_num, MPI_DOUBLE, rank_id, A_TAG, MPI_COMM_WORLD, &status);
+
+            int kb = 0;
+            for (int idx = 0; idx < inner_node_num; idx++) {
+                b[kb] = partial_b[idx];
+                kb += 1;
+            }
+
+            int ka = 0;
+            for (int idx = 0; idx < inner_node_sq_num; idx++) {
+                a[ka] = partial_a[idx];
+                ka += 1;
+            }
         }
 
         {
@@ -258,14 +292,15 @@ int main(int argc, char* argsv[]) {
     } else {
 
         // First scope: Calculating x and y
+        int node_lower, node_upper;
+
+        // Recieve the lower and upper bounds
+        MPI_Recv(&node_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(&node_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
+
+        int inner_node_num = node_upper - node_lower;
         {
-            int node_lower, node_upper;
 
-            // Recieve the lower and upper bounds
-            MPI_Recv(&node_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
-            MPI_Recv(&node_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
-
-            int inner_node_num = node_upper - node_lower;
 
             double* x = new double[inner_node_num];
             double* y = new double[inner_node_num];
@@ -280,13 +315,6 @@ int main(int argc, char* argsv[]) {
                 k = k + 1;
             }
 
-            printf("lower: %d, upper: %d rank %d x: ", node_lower, node_upper, rank);
-            for (int i = 0; i < inner_node_num; i++) {
-                printf("%.2f ", x[i]);
-
-            }
-            printf("\n");
-
             // We return the values calculated 
             MPI_Send(x, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD);
             MPI_Send(y, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD);
@@ -296,14 +324,35 @@ int main(int argc, char* argsv[]) {
             delete[] y;
         }
 
+        int elnum_lower, elnum_upper;
+
+
+        MPI_Recv(&elnum_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(&elnum_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
+
+        MPI_Recv(element_node, 3 * element_num, MPI_INT, ORCHESTRATOR, ELEMENT_TAG, MPI_COMM_WORLD, &status);
+
+        double* x = new double[node_num];
+        double* y = new double[node_num];
+
+        MPI_Recv(x, node_num, MPI_DOUBLE, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(y, node_num, MPI_DOUBLE, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD, &status);
+
+
+        int* a_splits = evenly_divide(node_num * node_num, size - 1);
+        int node_sq_lower = a_splits[rank - 1];
+        int node_sq_upper = a_splits[rank];
+
+        int inner_node_sq_num = node_sq_upper - node_sq_lower;
+
+        delete[] a_splits;
+
+        double* a = new double[node_sq_upper - node_sq_lower];
+        double* b = new double[inner_node_num];
+
         {
-            int elnum_lower, elnum_upper;
 
-            MPI_Recv(&elnum_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
-            MPI_Recv(&elnum_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
-            MPI_Recv(element_node, 3 * element_num, MPI_INT, ORCHESTRATOR, ELEMENT_TAG, MPI_COMM_WORLD, &status);
-
-            for (e = 0; e < element_num; e++) {
+            for (e = elnum_lower; e < elnum_upper; e++) {
                 i1 = element_node[0 + e * 3];
                 i2 = element_node[1 + e * 3];
                 i3 = element_node[2 + e * 3];
@@ -362,8 +411,21 @@ int main(int argc, char* argsv[]) {
                     }
                 }
             }
-        }
 
+            printf("lower: %d, upper: %d rank %d x: ", node_lower, node_upper, rank);
+            for (int i = 0; i < inner_node_num; i++) {
+                printf("%.2f ", b[i]);
+
+            }
+            printf("\n");
+
+            MPI_Send(&inner_node_num, 1, MPI_INT, ORCHESTRATOR, NUMBER_TAG, MPI_COMM_WORLD);
+            MPI_Send(&inner_node_sq_num, 1, MPI_INT, ORCHESTRATOR, NUMBER_TAG, MPI_COMM_WORLD);
+
+            MPI_Send(b, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, B_TAG, MPI_COMM_WORLD);
+            MPI_Send(a, inner_node_sq_num, MPI_DOUBLE, ORCHESTRATOR, A_TAG, MPI_COMM_WORLD);
+
+        }
     }
 
     MPI_Finalize();
