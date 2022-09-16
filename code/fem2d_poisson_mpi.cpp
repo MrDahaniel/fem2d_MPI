@@ -1,14 +1,18 @@
+#include <mpi.h>
+
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <mpi.h>
 
 #define ORCHESTRATOR 0
 
 #define X_TAG 10
 #define Y_TAG 20
+#define ELEMENT_TAG 30
+#define A_TAG 40
+#define B_TAG 50
 
 #define LOWER_TAG 100
 #define UPPER_TAG 200
@@ -19,7 +23,6 @@ void exact(double x, double y, double* u, double* dudx, double* dudy);
 double* r8ge_fs_new(int n, double a[], double b[]);
 void timestamp();
 int* evenly_divide(int to_be_divided, int parts, int lower_bound = 0);
-
 
 int main(int argc, char* argsv[]) {
     int rank, size;
@@ -32,14 +35,14 @@ int main(int argc, char* argsv[]) {
 
     const double pi = 3.141592653589793;
 
-    int nx = 15;
-    int ny = 10;
+    int nx = 5;
+    int ny = 5;
 
     double area;
 
     double dqidx, dqidy, dqjdx, dqjdy, dudx, dudy;
 
-    int e, i, i1, i2, i3, j, j2, nq1, nq2, nti1, nti2, nti3, ntj1, ntj2, ntj3;
+    int k, e, i, i1, i2, i3, j, j2, nq1, nq2, nti1, nti2, nti3, ntj1, ntj2, ntj3;
 
     int q1, q2;
     double qi;
@@ -62,9 +65,6 @@ int main(int argc, char* argsv[]) {
     // double* y = new double[node_num];
 
     int element_num = 2 * (nx - 1) * (ny - 1);
-
-    double* a = new double[node_num * node_num];
-    double* b = new double[node_num];
 
     if (rank == 0) {
         {
@@ -104,12 +104,6 @@ int main(int argc, char* argsv[]) {
         // The first operation is to divide our ny and nx evenly between our compute ranks
         int* node_splits = evenly_divide(node_num, size - 1);
 
-        printf("splits: ");
-        for (int i = 0; i < size; i++) {
-            printf("%d ", node_splits[i]);
-        }
-        printf("\n");
-
         // Then we send the ranges to be calculated
         for (int rank_id = 1; rank_id < size; rank_id++) {
             // Sending the node_num range
@@ -118,7 +112,7 @@ int main(int argc, char* argsv[]) {
         }
 
         // And we get the ranges that were calculated.
-        int k = 0;
+        k = 0;
         for (int rank_id = 1; rank_id < size; rank_id++) {
             int lower = node_splits[rank_id - 1] + 1;
             int upper = node_splits[rank_id];
@@ -131,11 +125,6 @@ int main(int argc, char* argsv[]) {
             MPI_Recv(partial_x, inner_node_num, MPI_DOUBLE, rank_id, X_TAG, MPI_COMM_WORLD, &status);
             MPI_Recv(partial_y, inner_node_num, MPI_DOUBLE, rank_id, Y_TAG, MPI_COMM_WORLD, &status);
 
-            printf("partial_x: ");
-            for (int i = 0; i < inner_node_num; i++) {
-                printf("%.2f ", partial_x[i]);
-            }
-
             for (int idx = 0; idx < inner_node_num; idx++) {
                 x[k] = partial_x[idx];
                 y[k] = partial_y[idx];
@@ -146,8 +135,10 @@ int main(int argc, char* argsv[]) {
             delete[] partial_y;
         }
 
+        k = 0;
 
-        int k = 0;
+        double* a = new double[node_num * node_num];
+        double* b = new double[node_num];
 
         for (j = 1; j <= ny - 1; j++) {
             for (i = 1; i <= nx - 1; i++) {
@@ -161,6 +152,49 @@ int main(int argc, char* argsv[]) {
                 element_node[2 + k * 3] = i + 1 + (j - 1) * nx - 1;
                 k = k + 1;
             }
+        }
+
+        for (int rank_id = 1; rank_id < size; i++) {
+            MPI_Send(x, node_num, MPI_INT, rank_id, X_TAG, MPI_COMM_WORLD);
+            MPI_Send(y, node_num, MPI_INT, rank_id, Y_TAG, MPI_COMM_WORLD);
+            MPI_Send(element_node, 3 * element_num, MPI_INT, rank_id, ELEMENT_TAG, MPI_COMM_WORLD);
+        }
+
+        int ka = 0;
+        int kb = 0;
+        for (int rank_id = 1; rank_id < size; rank_id++) {
+            int* element_splits = evenly_divide(element_num, size - 1);
+
+            int lower = element_splits[rank_id - 1];
+            int upper = element_splits[rank_id];
+
+            delete[] element_splits;
+
+            int inner_element_num = upper - lower;
+
+            double* partial_a = new double[inner_element_num * inner_element_num];
+            double* partial_b = new double[inner_element_num];
+
+            MPI_Recv(partial_a, inner_element_num * inner_element_num, MPI_DOUBLE, rank_id, A_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(partial_b, inner_element_num, MPI_DOUBLE, rank_id, B_TAG, MPI_COMM_WORLD, &status);
+
+            printf("partial_b: ");
+            for (int i = 0; i < inner_element_num; i++) {
+                printf("%.2f ", partial_b[i]);
+            }
+
+            for (int idx = 0; idx < inner_element_num * inner_element_num; idx++) {
+                a[k] = partial_a[idx];
+                ka += 1;
+            }
+
+            for (int idx = 0; idx < inner_element_num; idx++) {
+                b[k] = partial_b[idx];
+                kb += 1;
+            }
+
+            delete[] partial_a;
+            delete[] partial_b;
         }
 
         {
@@ -178,65 +212,6 @@ int main(int argc, char* argsv[]) {
                 }
             }
 
-            for (e = 0; e < element_num; e++) {
-                i1 = element_node[0 + e * 3];
-                i2 = element_node[1 + e * 3];
-                i3 = element_node[2 + e * 3];
-                area = 0.5 *
-                    (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
-                //
-                //  Consider each quadrature point.
-                //  Here, we use the midside nodes as quadrature points.
-                //
-                for (q1 = 0; q1 < 3; q1++) {
-                    q2 = (q1 + 1) % 3;
-
-                    nq1 = element_node[q1 + e * 3];
-                    nq2 = element_node[q2 + e * 3];
-
-                    xq = 0.5 * (x[nq1] + x[nq2]);
-                    yq = 0.5 * (y[nq1] + y[nq2]);
-                    wq = 1.0 / 3.0;
-                    //
-                    //  Consider each test function in the element.
-                    //
-                    for (ti1 = 0; ti1 < 3; ti1++) {
-                        ti2 = (ti1 + 1) % 3;
-                        ti3 = (ti1 + 2) % 3;
-
-                        nti1 = element_node[ti1 + e * 3];
-                        nti2 = element_node[ti2 + e * 3];
-                        nti3 = element_node[ti3 + e * 3];
-
-                        qi = 0.5 * ((x[nti3] - x[nti2]) * (yq - y[nti2]) - (y[nti3] - y[nti2]) * (xq - x[nti2])) / area;
-                        dqidx = -0.5 * (y[nti3] - y[nti2]) / area;
-                        dqidy = 0.5 * (x[nti3] - x[nti2]) / area;
-
-                        rhs = 2.0 * pi * pi * sin(pi * xq) * sin(pi * yq);
-
-                        b[nti1] = b[nti1] + area * wq * rhs * qi;
-                        //
-                        //  Consider each basis function in the element.
-                        //
-                        for (tj1 = 0; tj1 < 3; tj1++) {
-                            tj2 = (tj1 + 1) % 3;
-                            tj3 = (tj1 + 2) % 3;
-
-                            ntj1 = element_node[tj1 + e * 3];
-                            ntj2 = element_node[tj2 + e * 3];
-                            ntj3 = element_node[tj3 + e * 3];
-
-                            //        qj = 0.5 * (
-                            //            ( x[ntj3] - x[ntj2] ) * ( yq - y[ntj2] )
-                            //          - ( y[ntj3] - y[ntj2] ) * ( xq - x[ntj2] ) ) / area;
-                            dqjdx = -0.5 * (y[ntj3] - y[ntj2]) / area;
-                            dqjdy = 0.5 * (x[ntj3] - x[ntj2]) / area;
-
-                            a[nti1 + ntj1 * node_num] = a[nti1 + ntj1 * node_num] + area * wq * (dqidx * dqjdx + dqidy * dqjdy);
-                        }
-                    }
-                }
-            }
             //
             //  BOUNDARY CONDITIONS
             //
@@ -277,13 +252,13 @@ int main(int argc, char* argsv[]) {
                     exact(x[k], y[k], &u, &dudx, &dudy);
 
                     cout << "  " << setw(4) << k
-                        << "  " << setw(4) << i
-                        << "  " << setw(4) << j
-                        << "  " << setw(10) << x[k]
-                        << "  " << setw(10) << y[k]
-                        << "  " << setw(14) << u
-                        << "  " << setw(14) << c[k]
-                        << "  " << setw(14) << fabs(u - c[k]) << "\n";
+                         << "  " << setw(4) << i
+                         << "  " << setw(4) << j
+                         << "  " << setw(10) << x[k]
+                         << "  " << setw(10) << y[k]
+                         << "  " << setw(14) << u
+                         << "  " << setw(14) << c[k]
+                         << "  " << setw(14) << fabs(u - c[k]) << "\n";
 
                     k = k + 1;
                 }
@@ -309,7 +284,6 @@ int main(int argc, char* argsv[]) {
         }
 
     } else {
-
         // First scope: Calculating x and y
         {
             int node_lower, node_upper;
@@ -333,14 +307,7 @@ int main(int argc, char* argsv[]) {
                 k = k + 1;
             }
 
-            printf("lower: %d, upper: %d rank %d x: ", node_lower, node_upper, rank);
-            for (int i = 0; i < inner_node_num; i++) {
-                printf("%.2f ", x[i]);
-
-            }
-            printf("\n");
-
-            // We return the values calculated 
+            // We return the values calculated
             MPI_Send(x, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD);
             MPI_Send(y, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD);
 
@@ -349,6 +316,91 @@ int main(int argc, char* argsv[]) {
             delete[] y;
         }
 
+        int* y = new int[node_num];
+        int* x = new int[node_num];
+        int* element_node = new int[3 * element_num];
+
+        MPI_Recv(x, node_num, MPI_INT, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(y, node_num, MPI_INT, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(element_node, 3 * element_num, MPI_INT, ORCHESTRATOR, ELEMENT_TAG, MPI_COMM_WORLD, &status);
+
+        int* element_splits = evenly_divide(element_num, size - 1);
+        int lower = element_splits[rank - 1];
+        int upper = element_splits[rank];
+        int inner_element_num = upper - lower;
+
+        delete[] element_splits;
+
+        double* a = new double[inner_element_num * inner_element_num];
+        double* b = new double[inner_element_num];
+
+        {
+            for (e = lower; e < upper; e++) {
+                i1 = element_node[0 + e * 3];
+                i2 = element_node[1 + e * 3];
+                i3 = element_node[2 + e * 3];
+                area = 0.5 *
+                       (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
+                //
+                //  Consider each quadrature point.
+                //  Here, we use the midside nodes as quadrature points.
+                //
+                for (q1 = 0; q1 < 3; q1++) {
+                    q2 = (q1 + 1) % 3;
+
+                    nq1 = element_node[q1 + e * 3];
+                    nq2 = element_node[q2 + e * 3];
+
+                    xq = 0.5 * (x[nq1] + x[nq2]);
+                    yq = 0.5 * (y[nq1] + y[nq2]);
+                    wq = 1.0 / 3.0;
+                    //
+                    //  Consider each test function in the element.
+                    //
+                    for (ti1 = 0; ti1 < 3; ti1++) {
+                        ti2 = (ti1 + 1) % 3;
+                        ti3 = (ti1 + 2) % 3;
+
+                        nti1 = element_node[ti1 + e * 3];
+                        nti2 = element_node[ti2 + e * 3];
+                        nti3 = element_node[ti3 + e * 3];
+
+                        qi = 0.5 * ((x[nti3] - x[nti2]) * (yq - y[nti2]) - (y[nti3] - y[nti2]) * (xq - x[nti2])) / area;
+                        dqidx = -0.5 * (y[nti3] - y[nti2]) / area;
+                        dqidy = 0.5 * (x[nti3] - x[nti2]) / area;
+
+                        rhs = 2.0 * pi * pi * sin(pi * xq) * sin(pi * yq);
+
+                        b[nti1 - lower] = b[nti1 - lower] + area * wq * rhs * qi;
+                        //
+                        //  Consider each basis function in the element.
+                        //
+                        for (tj1 = 0; tj1 < 3; tj1++) {
+                            tj2 = (tj1 + 1) % 3;
+                            tj3 = (tj1 + 2) % 3;
+
+                            ntj1 = element_node[tj1 + e * 3];
+                            ntj2 = element_node[tj2 + e * 3];
+                            ntj3 = element_node[tj3 + e * 3];
+
+                            //        qj = 0.5 * (
+                            //            ( x[ntj3] - x[ntj2] ) * ( yq - y[ntj2] )
+                            //          - ( y[ntj3] - y[ntj2] ) * ( xq - x[ntj2] ) ) / area;
+                            dqjdx = -0.5 * (y[ntj3] - y[ntj2]) / area;
+                            dqjdy = 0.5 * (x[ntj3] - x[ntj2]) / area;
+
+                            a[(nti1 + ntj1 * node_num) - lower] = a[(nti1 + ntj1 * node_num) - lower] + area * wq * (dqidx * dqjdx + dqidy * dqjdy);
+                        }
+                    }
+                }
+            }
+        }
+
+        MPI_Send(a, inner_element_num * inner_element_num, MPI_DOUBLE, ORCHESTRATOR, A_TAG, MPI_COMM_WORLD);
+        MPI_Send(b, inner_element_num, MPI_DOUBLE, ORCHESTRATOR, A_TAG, MPI_COMM_WORLD);
+
+        delete[] a;
+        delete[] b;
     }
 
     MPI_Finalize();
