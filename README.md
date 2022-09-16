@@ -9,4 +9,4 @@ El presente repositorio contiene todo lo relacionado con el desarrollo del proye
 -   Yelitza Juliana Villamizar Guerrero - [Ywashere](https://github.com/Ywashere)
 -   Daniel David Delgado Cervantes - [mrdahaniel](https://github.com/mrdahaniel)
 -   Laura Daniela Medina Paipilla - [lauradanielamedina](https://github.com/lauradanielamedina)
--   Andrea Juliana Urrego Paredes -
+-   Andrea Juliana Urrego Paredes - [Juliana18p](https://github.com/Juliana18p)
