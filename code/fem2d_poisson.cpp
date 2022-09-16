@@ -74,8 +74,8 @@ int main()
 //    John Burkardt
 //
 {
-    int nx = 5;
-    int ny = 5;
+    int nx = 15;
+    int ny = 10;
 
     double* a;
     double area;

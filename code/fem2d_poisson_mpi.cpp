@@ -32,8 +32,8 @@ int main(int argc, char* argsv[]) {
 
     const double pi = 3.141592653589793;
 
-    int nx = 5;
-    int ny = 5;
+    int nx = 15;
+    int ny = 10;
 
     double area;
 
@@ -62,7 +62,6 @@ int main(int argc, char* argsv[]) {
     // double* y = new double[node_num];
 
     int element_num = 2 * (nx - 1) * (ny - 1);
-    int* element_node = new int[3 * element_num];
 
     double* a = new double[node_num * node_num];
     double* b = new double[node_num];
@@ -94,7 +93,10 @@ int main(int argc, char* argsv[]) {
             cout << "   NX =                       " << nx << "\n";
             cout << "   NY =                       " << ny << "\n";
             cout << "   Number of nodes =          " << node_num << "\n";
+            cout << "   Number of elements =       " << element_num << "\n";
         }
+
+        int* element_node = new int[3 * element_num];
 
         double* x = new double[node_num];
         double* y = new double[node_num];
@@ -144,24 +146,24 @@ int main(int argc, char* argsv[]) {
             delete[] partial_y;
         }
 
-        {
-            cout << "   Number of elements =       " << element_num << "\n";
 
-            int k = 0;
+        int k = 0;
 
-            for (j = 1; j <= ny - 1; j++) {
-                for (i = 1; i <= nx - 1; i++) {
-                    element_node[0 + k * 3] = i + (j - 1) * nx - 1;
-                    element_node[1 + k * 3] = i + 1 + (j - 1) * nx - 1;
-                    element_node[2 + k * 3] = i + j * nx - 1;
-                    k = k + 1;
+        for (j = 1; j <= ny - 1; j++) {
+            for (i = 1; i <= nx - 1; i++) {
+                element_node[0 + k * 3] = i + (j - 1) * nx - 1;
+                element_node[1 + k * 3] = i + 1 + (j - 1) * nx - 1;
+                element_node[2 + k * 3] = i + j * nx - 1;
+                k = k + 1;
 
-                    element_node[0 + k * 3] = i + 1 + j * nx - 1;
-                    element_node[1 + k * 3] = i + j * nx - 1;
-                    element_node[2 + k * 3] = i + 1 + (j - 1) * nx - 1;
-                    k = k + 1;
-                }
+                element_node[0 + k * 3] = i + 1 + j * nx - 1;
+                element_node[1 + k * 3] = i + j * nx - 1;
+                element_node[2 + k * 3] = i + 1 + (j - 1) * nx - 1;
+                k = k + 1;
             }
+        }
+
+        {
             //
             //  Assemble the coefficient matrix A and the right-hand side B of the
             //  finite element equations, ignoring boundary conditions.
@@ -316,8 +318,6 @@ int main(int argc, char* argsv[]) {
             MPI_Recv(&node_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
             MPI_Recv(&node_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
 
-            // node_lower += 1;
-
             int inner_node_num = node_upper - node_lower;
 
             double* x = new double[inner_node_num];
@@ -325,8 +325,8 @@ int main(int argc, char* argsv[]) {
 
             int k = 0;
             for (int idx = node_lower; idx < node_upper; idx++) {
-                int j = 1 + (idx / nx);
-                int i = 1 + (idx % nx);
+                int j = 1 + (idx / ny);
+                int i = 1 + (idx % ny);
 
                 x[k] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
                 y[k] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
