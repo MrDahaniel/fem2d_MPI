@@ -171,15 +171,33 @@ int main()
     x = new double[node_num];
     y = new double[node_num];
 
-    k = 0;
-    for (j = 1; j <= ny; j++) {
-        for (i = 1; i <= nx; i++) {
-            x[k] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
+    // k = 0;
+    // for (j = 1; j <= ny; j++) {
+    //     for (i = 1; i <= nx; i++) {
+    //         x[k] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
 
-            y[k] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
-            k = k + 1;
-        }
+    //         y[k] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
+
+    //         printf("%d: %d, %d |", k, i, j);
+
+    //         k = k + 1;
+    //     }
+    // }
+
+    printf("\n");
+
+    for (int idx = 0; idx < node_num; idx++) {
+        j = 1 + idx / ny;
+        i = 1 + idx % ny;
+
+        printf("%d: %d, %d |", idx, i, j);
+
+        x[idx] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
+
+        y[idx] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
     }
+    printf("\n");
+
     //
     //  ELEMENT array
     //

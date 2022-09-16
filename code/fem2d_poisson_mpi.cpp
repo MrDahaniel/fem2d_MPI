@@ -18,7 +18,7 @@ using namespace std;
 void exact(double x, double y, double* u, double* dudx, double* dudy);
 double* r8ge_fs_new(int n, double a[], double b[]);
 void timestamp();
-int* evenly_divide(int to_be_divided, int parts, int lower_bound = 1);
+int* evenly_divide(int to_be_divided, int parts, int lower_bound = 0);
 
 
 int main(int argc, char* argsv[]) {
@@ -100,28 +100,28 @@ int main(int argc, char* argsv[]) {
         double* y = new double[node_num];
 
         // The first operation is to divide our ny and nx evenly between our compute ranks
-        int* nx_splits = evenly_divide(nx, size - 1);
-        int* ny_splits = evenly_divide(ny, size - 1);
+        int* node_splits = evenly_divide(node_num, size - 1);
+
+        printf("splits: ");
+        for (int i = 0; i < size; i++) {
+            printf("%d ", node_splits[i]);
+        }
+        printf("\n");
 
         // Then we send the ranges to be calculated
         for (int rank_id = 1; rank_id < size; rank_id++) {
-            // Sending the nx range
-            MPI_Send(&nx_splits[rank_id - 1], 1, MPI_INT, rank_id, LOWER_TAG, MPI_COMM_WORLD);
-            MPI_Send(&nx_splits[rank_id], 1, MPI_INT, rank_id, UPPER_TAG, MPI_COMM_WORLD);
-
-            // Sending the ny range
-            MPI_Send(&ny_splits[rank_id - 1], 1, MPI_INT, rank_id, LOWER_TAG, MPI_COMM_WORLD);
-            MPI_Send(&ny_splits[rank_id], 1, MPI_INT, rank_id, UPPER_TAG, MPI_COMM_WORLD);
+            // Sending the node_num range
+            MPI_Send(&node_splits[rank_id - 1], 1, MPI_INT, rank_id, LOWER_TAG, MPI_COMM_WORLD);
+            MPI_Send(&node_splits[rank_id], 1, MPI_INT, rank_id, UPPER_TAG, MPI_COMM_WORLD);
         }
-
 
         // And we get the ranges that were calculated.
         int k = 0;
         for (int rank_id = 1; rank_id < size; rank_id++) {
-            int x_size = nx_splits[rank_id] - nx_splits[rank_id - 1] + 1;
-            int y_size = ny_splits[rank_id] - ny_splits[rank_id - 1] + 1;
+            int lower = node_splits[rank_id - 1] + 1;
+            int upper = node_splits[rank_id];
 
-            int inner_node_num = x_size * y_size;
+            int inner_node_num = upper - lower + 1;
 
             double* partial_x = new double[inner_node_num];
             double* partial_y = new double[inner_node_num];
@@ -134,29 +134,15 @@ int main(int argc, char* argsv[]) {
                 printf("%.2f ", partial_x[i]);
             }
 
-            for (int i = 0; i < y_size; i++) {
-                for (int j = 0; j < x_size; j++) {
-                    x[k] = partial_x[j + y_size * i];
-                    y[k] = partial_y[j + y_size * i];
-                    k += 1;
-                }
+            for (int idx = 0; idx < inner_node_num; idx++) {
+                x[k] = partial_x[idx];
+                y[k] = partial_y[idx];
+                k += 1;
             }
 
             delete[] partial_x;
             delete[] partial_y;
         }
-
-        // printf("x: ");
-        // for (int i = 0; i < node_num; i++) {
-        //     printf("%.2f ", x[i]);
-
-        // }
-        // printf("\n");
-        // printf("y: ");
-        // for (int i = 0; i < node_num; i++) {
-        //     printf("%.2f ", y[i]);
-        // }
-        // printf("\n");
 
         {
             cout << "   Number of elements =       " << element_num << "\n";
@@ -324,43 +310,39 @@ int main(int argc, char* argsv[]) {
 
         // First scope: Calculating x and y
         {
-            int nx_lower, nx_upper;
-            int ny_lower, ny_upper;
+            int node_lower, node_upper;
 
-            // Recieve the lower and upper bounds for nx
-            MPI_Recv(&nx_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
-            MPI_Recv(&nx_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
+            // Recieve the lower and upper bounds
+            MPI_Recv(&node_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
+            MPI_Recv(&node_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
 
-            // Recieve the lower and upper bounds for ny
-            MPI_Recv(&ny_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
-            MPI_Recv(&ny_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
+            // node_lower += 1;
 
-            int x_size = nx_upper - nx_lower + 1;
-            int y_size = ny_upper - ny_lower + 1;
+            int inner_node_num = node_upper - node_lower;
 
-            double* x = new double[x_size * y_size];
-            double* y = new double[x_size * y_size];
+            double* x = new double[inner_node_num];
+            double* y = new double[inner_node_num];
 
             int k = 0;
-            for (int j = ny_lower; j <= ny_upper; j++) {
-                for (int i = nx_lower; i <= nx_upper; i++) {
-                    x[k] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
+            for (int idx = node_lower; idx < node_upper; idx++) {
+                int j = 1 + (idx / nx);
+                int i = 1 + (idx % nx);
 
-                    y[k] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
-                    k = k + 1;
-                }
+                x[k] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
+                y[k] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
+                k = k + 1;
             }
 
-            printf("rank %d x: ", rank);
-            for (int i = 0; i < x_size * y_size; i++) {
+            printf("lower: %d, upper: %d rank %d x: ", node_lower, node_upper, rank);
+            for (int i = 0; i < inner_node_num; i++) {
                 printf("%.2f ", x[i]);
 
             }
             printf("\n");
 
             // We return the values calculated 
-            MPI_Send(x, x_size * y_size, MPI_DOUBLE, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD);
-            MPI_Send(y, x_size * y_size, MPI_DOUBLE, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD);
+            MPI_Send(x, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD);
+            MPI_Send(y, inner_node_num, MPI_DOUBLE, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD);
 
             // And delete x and y
             delete[] x;
