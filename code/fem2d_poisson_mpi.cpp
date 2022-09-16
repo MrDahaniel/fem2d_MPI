@@ -316,8 +316,8 @@ int main(int argc, char* argsv[]) {
             delete[] y;
         }
 
-        int* y = new int[node_num];
-        int* x = new int[node_num];
+        double* y = new double[node_num];
+        double* x = new double[node_num];
         int* element_node = new int[3 * element_num];
 
         MPI_Recv(x, node_num, MPI_INT, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD, &status);
@@ -397,7 +397,7 @@ int main(int argc, char* argsv[]) {
         }
 
         MPI_Send(a, inner_element_num * inner_element_num, MPI_DOUBLE, ORCHESTRATOR, A_TAG, MPI_COMM_WORLD);
-        MPI_Send(b, inner_element_num, MPI_DOUBLE, ORCHESTRATOR, A_TAG, MPI_COMM_WORLD);
+        MPI_Send(b, inner_element_num, MPI_DOUBLE, ORCHESTRATOR, B_TAG, MPI_COMM_WORLD);
 
         delete[] a;
         delete[] b;
