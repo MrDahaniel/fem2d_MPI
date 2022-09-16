@@ -4,9 +4,9 @@ El presente repositorio contiene todo lo relacionado con el desarrollo del proye
 
 ## Desarrollo Por
 
--   Didier Fernando Vallejo Sanabria - yiye77
--   Sebastian Camilo Viancha Bautista -
--   Yelitza Juliana Villamizar Guerrero - Ywashere
--   Daniel David Delgado Cervantes - mrdahaniel
--   Laura Daniela Medina Paipilla - lauradanielamedina
+-   Didier Fernando Vallejo Sanabria - [yiye77](https://github.com/yiye77)
+-   Sebastian Camilo Viancha Bautista - [SCBViancha](https://github.com/SCBViancha)
+-   Yelitza Juliana Villamizar Guerrero - [Ywashere](https://github.com/Ywashere)
+-   Daniel David Delgado Cervantes - [mrdahaniel](https://github.com/mrdahaniel)
+-   Laura Daniela Medina Paipilla - [lauradanielamedina](https://github.com/lauradanielamedina)
 -   Andrea Juliana Urrego Paredes -
