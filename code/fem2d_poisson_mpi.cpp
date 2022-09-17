@@ -32,14 +32,14 @@ int main(int argc, char* argsv[]) {
 
     const double pi = 3.141592653589793;
 
-    int nx = 15;
-    int ny = 10;
+    int nx = 5;
+    int ny = 5;
 
     double area;
 
     double dqidx, dqidy, dqjdx, dqjdy, dudx, dudy;
 
-    int e, i, i1, i2, i3, j, j2, nq1, nq2, nti1, nti2, nti3, ntj1, ntj2, ntj3;
+    int e, i, k, i1, i2, i3, j, j2, nq1, nq2, nti1, nti2, nti3, ntj1, ntj2, ntj3;
 
     int q1, q2;
     double qi;
@@ -118,7 +118,7 @@ int main(int argc, char* argsv[]) {
         }
 
         // And we get the ranges that were calculated.
-        int k = 0;
+        k = 0;
         for (int rank_id = 1; rank_id < size; rank_id++) {
             int lower = node_splits[rank_id - 1] + 1;
             int upper = node_splits[rank_id];
@@ -147,7 +147,7 @@ int main(int argc, char* argsv[]) {
         }
 
 
-        int k = 0;
+        k = 0;
 
         for (j = 1; j <= ny - 1; j++) {
             for (i = 1; i <= nx - 1; i++) {

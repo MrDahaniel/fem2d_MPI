@@ -74,8 +74,8 @@ int main()
 //    John Burkardt
 //
 {
-    int nx = 15;
-    int ny = 10;
+    int nx = 50;
+    int ny = 50;
 
     double* a;
     double area;
@@ -184,19 +184,14 @@ int main()
     //     }
     // }
 
-    printf("\n");
 
     for (int idx = 0; idx < node_num; idx++) {
         j = 1 + idx / ny;
         i = 1 + idx % ny;
 
-        printf("%d: %d, %d |", idx, i, j);
-
         x[idx] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
-
         y[idx] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
     }
-    printf("\n");
 
     //
     //  ELEMENT array
