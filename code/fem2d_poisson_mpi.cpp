@@ -138,8 +138,6 @@ int main(int argc, char* argsv[]) {
 
         k = 0;
 
-        printf("here");
-
         double* a = new double[node_num * node_num];
         double* b = new double[node_num];
 
@@ -158,8 +156,8 @@ int main(int argc, char* argsv[]) {
         }
 
         for (int rank_id = 1; rank_id < size; rank_id++) {
-            MPI_Send(x, node_num, MPI_INT, rank_id, X_TAG, MPI_COMM_WORLD);
-            MPI_Send(y, node_num, MPI_INT, rank_id, Y_TAG, MPI_COMM_WORLD);
+            MPI_Send(x, node_num, MPI_DOUBLE, rank_id, X_TAG, MPI_COMM_WORLD);
+            MPI_Send(y, node_num, MPI_DOUBLE, rank_id, Y_TAG, MPI_COMM_WORLD);
             MPI_Send(element_node, 3 * element_num, MPI_INT, rank_id, ELEMENT_TAG, MPI_COMM_WORLD);
         }
 
@@ -181,7 +179,7 @@ int main(int argc, char* argsv[]) {
             MPI_Recv(partial_a, inner_element_num * inner_element_num, MPI_DOUBLE, rank_id, A_TAG, MPI_COMM_WORLD, &status);
             MPI_Recv(partial_b, inner_element_num, MPI_DOUBLE, rank_id, B_TAG, MPI_COMM_WORLD, &status);
 
-            printf("partial_b: ");
+            printf("rank %d partial_b: ", rank_id);
             for (int i = 0; i < inner_element_num; i++) {
                 printf("%.2f ", partial_b[i]);
             }
@@ -195,6 +193,7 @@ int main(int argc, char* argsv[]) {
                 b[k] = partial_b[idx];
                 kb += 1;
             }
+            printf("\n\n\nhere\n\n\n");
 
             delete[] partial_a;
             delete[] partial_b;
@@ -323,8 +322,8 @@ int main(int argc, char* argsv[]) {
         double* x = new double[node_num];
         int* element_node = new int[3 * element_num];
 
-        MPI_Recv(x, node_num, MPI_INT, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD, &status);
-        MPI_Recv(y, node_num, MPI_INT, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(x, node_num, MPI_DOUBLE, ORCHESTRATOR, X_TAG, MPI_COMM_WORLD, &status);
+        MPI_Recv(y, node_num, MPI_DOUBLE, ORCHESTRATOR, Y_TAG, MPI_COMM_WORLD, &status);
         MPI_Recv(element_node, 3 * element_num, MPI_INT, ORCHESTRATOR, ELEMENT_TAG, MPI_COMM_WORLD, &status);
 
         int* element_splits = evenly_divide(element_num, size - 1);
@@ -332,6 +331,8 @@ int main(int argc, char* argsv[]) {
         int lower = element_splits[rank - 1];
         int upper = element_splits[rank];
         int inner_element_num = upper - lower;
+
+        printf("\n\nrank %d lower %d upper %d\n\n", rank, lower, upper);
 
         delete[] element_splits;
 
@@ -402,9 +403,6 @@ int main(int argc, char* argsv[]) {
 
         MPI_Send(a, inner_element_num * inner_element_num, MPI_DOUBLE, ORCHESTRATOR, A_TAG, MPI_COMM_WORLD);
         MPI_Send(b, inner_element_num, MPI_DOUBLE, ORCHESTRATOR, B_TAG, MPI_COMM_WORLD);
-
-        delete[] a;
-        delete[] b;
     }
 
     MPI_Finalize();

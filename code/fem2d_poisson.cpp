@@ -74,8 +74,8 @@ int main()
 //    John Burkardt
 //
 {
-    int nx = 15;
-    int ny = 10;
+    int nx = 5;
+    int ny = 5;
 
     double* a;
     double area;
@@ -260,7 +260,7 @@ int main()
         i2 = element_node[1 + e * 3];
         i3 = element_node[2 + e * 3];
         area = 0.5 *
-            (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
+               (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
         //
         //  Consider each quadrature point.
         //  Here, we use the midside nodes as quadrature points.
@@ -314,6 +314,13 @@ int main()
             }
         }
     }
+
+    printf("b: ");
+    for (int i = 0; i < element_num; i++) {
+        printf("%.2f ", b[i]);
+    }
+    printf("\n ");
+
     //
     //  BOUNDARY CONDITIONS
     //
@@ -354,13 +361,13 @@ int main()
             exact(x[k], y[k], &u, &dudx, &dudy);
 
             cout << "  " << setw(4) << k
-                << "  " << setw(4) << i
-                << "  " << setw(4) << j
-                << "  " << setw(10) << x[k]
-                << "  " << setw(10) << y[k]
-                << "  " << setw(14) << u
-                << "  " << setw(14) << c[k]
-                << "  " << setw(14) << fabs(u - c[k]) << "\n";
+                 << "  " << setw(4) << i
+                 << "  " << setw(4) << j
+                 << "  " << setw(10) << x[k]
+                 << "  " << setw(10) << y[k]
+                 << "  " << setw(14) << u
+                 << "  " << setw(14) << c[k]
+                 << "  " << setw(14) << fabs(u - c[k]) << "\n";
 
             k = k + 1;
         }
