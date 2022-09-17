@@ -5,6 +5,7 @@
 #include <ctime>
 #include <iomanip>
 #include <iostream>
+#include <algorithm> 
 
 #define ORCHESTRATOR 0
 
@@ -23,6 +24,7 @@ void exact(double x, double y, double* u, double* dudx, double* dudy);
 double* r8ge_fs_new(int n, double a[], double b[]);
 void timestamp();
 int* evenly_divide(int to_be_divided, int parts, int lower_bound = 0);
+int idx_shift(int* e_node, int e_num, int lower, int upper);
 
 int main(int argc, char* argsv[]) {
     int rank, size;
@@ -183,6 +185,7 @@ int main(int argc, char* argsv[]) {
             for (int i = 0; i < inner_element_num; i++) {
                 printf("%.2f ", partial_b[i]);
             }
+            printf("\n");
 
             for (int idx = 0; idx < inner_element_num * inner_element_num; idx++) {
                 a[k] = partial_a[idx];
@@ -193,8 +196,6 @@ int main(int argc, char* argsv[]) {
                 b[k] = partial_b[idx];
                 kb += 1;
             }
-            printf("\n\n\nhere\n\n\n");
-
             delete[] partial_a;
             delete[] partial_b;
         }
@@ -254,13 +255,13 @@ int main(int argc, char* argsv[]) {
                     exact(x[k], y[k], &u, &dudx, &dudy);
 
                     cout << "  " << setw(4) << k
-                         << "  " << setw(4) << i
-                         << "  " << setw(4) << j
-                         << "  " << setw(10) << x[k]
-                         << "  " << setw(10) << y[k]
-                         << "  " << setw(14) << u
-                         << "  " << setw(14) << c[k]
-                         << "  " << setw(14) << fabs(u - c[k]) << "\n";
+                        << "  " << setw(4) << i
+                        << "  " << setw(4) << j
+                        << "  " << setw(10) << x[k]
+                        << "  " << setw(10) << y[k]
+                        << "  " << setw(14) << u
+                        << "  " << setw(14) << c[k]
+                        << "  " << setw(14) << fabs(u - c[k]) << "\n";
 
                     k = k + 1;
                 }
@@ -287,10 +288,10 @@ int main(int argc, char* argsv[]) {
 
     } else {
         // First scope: Calculating x and y
-        {
-            int node_lower, node_upper;
+        int node_lower, node_upper;
 
-            // Recieve the lower and upper bounds
+        // Recieve the lower and upper bounds
+        {
             MPI_Recv(&node_lower, 1, MPI_INT, ORCHESTRATOR, LOWER_TAG, MPI_COMM_WORLD, &status);
             MPI_Recv(&node_upper, 1, MPI_INT, ORCHESTRATOR, UPPER_TAG, MPI_COMM_WORLD, &status);
 
@@ -332,20 +333,21 @@ int main(int argc, char* argsv[]) {
         int upper = element_splits[rank];
         int inner_element_num = upper - lower;
 
-        printf("\n\nrank %d lower %d upper %d\n\n", rank, lower, upper);
-
         delete[] element_splits;
 
         double* a = new double[inner_element_num * inner_element_num];
         double* b = new double[inner_element_num];
 
+        int shift = idx_shift(element_node, inner_element_num, lower, upper);
+
         {
             for (e = lower; e < upper; e++) {
+                // printf("rank %d lower %d upper %d e %d\n", rank, lower, upper, e);
                 i1 = element_node[0 + e * 3];
                 i2 = element_node[1 + e * 3];
                 i3 = element_node[2 + e * 3];
                 area = 0.5 *
-                       (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
+                    (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
                 //
                 //  Consider each quadrature point.
                 //  Here, we use the midside nodes as quadrature points.
@@ -376,7 +378,10 @@ int main(int argc, char* argsv[]) {
 
                         rhs = 2.0 * pi * pi * sin(pi * xq) * sin(pi * yq);
 
-                        b[nti1 - lower] = b[nti1 - lower] + area * wq * rhs * qi;
+                        int pos = nti1 - shift;
+
+                        b[pos] = b[pos] + area * wq * rhs * qi;
+                        printf("rank %d idx %d r_idx %d shift %d b %.2f\n", rank, nti1, pos, shift, b[pos]);
                         //
                         //  Consider each basis function in the element.
                         //
@@ -541,4 +546,17 @@ int* evenly_divide(int to_be_divided, int parts, int lower_bound) {
     splits[parts] = to_be_divided;
 
     return splits;
+}
+
+int idx_shift(int* e_node, int e_num, int lower, int upper) {
+    int i1, i2, i3, m = 2147483647;
+    for (int e = lower; e < upper; e++) {
+        i1 = e_node[0 + e * 3];
+        i2 = e_node[1 + e * 3];
+        i3 = e_node[2 + e * 3];
+
+        m = min({ i1, i2, i3, m });
+    }
+
+    return abs(m);
 }
