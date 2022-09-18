@@ -74,8 +74,8 @@ int main()
 //    John Burkardt
 //
 {
-    int nx = 50;
-    int ny = 50;
+    int nx = 100;
+    int ny = 100;
 
     double* a;
     double area;
@@ -171,20 +171,6 @@ int main()
     x = new double[node_num];
     y = new double[node_num];
 
-    // k = 0;
-    // for (j = 1; j <= ny; j++) {
-    //     for (i = 1; i <= nx; i++) {
-    //         x[k] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
-
-    //         y[k] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
-
-    //         printf("%d: %d, %d |", k, i, j);
-
-    //         k = k + 1;
-    //     }
-    // }
-
-
     for (int idx = 0; idx < node_num; idx++) {
         j = 1 + idx / ny;
         i = 1 + idx % ny;
@@ -255,7 +241,7 @@ int main()
         i2 = element_node[1 + e * 3];
         i3 = element_node[2 + e * 3];
         area = 0.5 *
-            (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
+               (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
         //
         //  Consider each quadrature point.
         //  Here, we use the midside nodes as quadrature points.
@@ -329,6 +315,7 @@ int main()
             k = k + 1;
         }
     }
+
     //  SOLVE the linear system A * C = B.
     //
     //  The solution is returned in C.
@@ -337,6 +324,7 @@ int main()
     //
     //  COMPARE computed and exact solutions.
     //
+
     cout << "\n";
     cout << "     K     I     J          X           Y        U               U                Error\n";
     cout << "                                                 exact           computed\n";
@@ -349,13 +337,13 @@ int main()
             exact(x[k], y[k], &u, &dudx, &dudy);
 
             cout << "  " << setw(4) << k
-                << "  " << setw(4) << i
-                << "  " << setw(4) << j
-                << "  " << setw(10) << x[k]
-                << "  " << setw(10) << y[k]
-                << "  " << setw(14) << u
-                << "  " << setw(14) << c[k]
-                << "  " << setw(14) << fabs(u - c[k]) << "\n";
+                 << "  " << setw(4) << i
+                 << "  " << setw(4) << j
+                 << "  " << setw(10) << x[k]
+                 << "  " << setw(10) << y[k]
+                 << "  " << setw(14) << u
+                 << "  " << setw(14) << c[k]
+                 << "  " << setw(14) << fabs(u - c[k]) << "\n";
 
             k = k + 1;
         }
