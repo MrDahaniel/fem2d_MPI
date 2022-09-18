@@ -30,8 +30,10 @@ void ProcessInitialization(double*& pMatrix, double*& pVector,
     double*& pProcResult, int& size, int& RowNum) {
     int RestRows;
     int i;
+
     MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
     RestRows = size;
+
 
     for (i = 0; i < ProcRank; i++)
         RestRows = RestRows - RestRows / (ProcNum - i);
@@ -47,13 +49,6 @@ void ProcessInitialization(double*& pMatrix, double*& pVector,
 
     for (int i = 0; i < RowNum; i++)
         pProcPivotIter[i] = -1;
-
-    if (ProcRank == 0) {
-        pMatrix = new double[size * size];
-        pVector = new double[size];
-        pResult = new double[size];
-        RandomDataInitialization(pMatrix, pVector, size);
-    }
 }
 
 void DataDistribution(double* pMatrix, double* pProcRows, double* pVector,
@@ -227,18 +222,6 @@ void ParallelBackSubstitution(double* pProcRows, double* pProcVector,
             }
     }
 }
-void TestDistribution(double* pMatrix, double* pVector, double* pProcRows,
-    double* pResult, int size, int RowNum) {
-    if (ProcRank == 0) {
-        printf("Initial Matrix: \n");
-        PrintMatrix(pMatrix, size, size);
-        printf("Initial Vector: \n");
-        PrintVector(pVector, size);
-        printf("Result: \n");
-        PrintResultVector(pResult, size);
-    }
-    MPI_Barrier(MPI_COMM_WORLD);
-}
 
 void ParallelResultCalculation(double* pProcRows, double* pProcVector,
     double* pProcResult, int size, int RowNum) {
@@ -248,13 +231,7 @@ void ParallelResultCalculation(double* pProcRows, double* pProcVector,
         RowNum);
 }
 
-void ProcessTermination(double* pMatrix, double* pVector, double* pResult,
-    double* pProcRows, double* pProcVector, double* pProcResult) {
-    if (ProcRank == 0) {
-        delete[] pMatrix;
-        delete[] pVector;
-        delete[] pResult;
-    }
+void ProcessTermination(double* pProcRows, double* pProcVector, double* pProcResult) {
     delete[] pProcRows;
     delete[] pProcVector;
     delete[] pProcResult;
@@ -265,9 +242,6 @@ void ProcessTermination(double* pMatrix, double* pVector, double* pResult,
 }
 
 void TestResult(double* pMatrix, double* pVector, double* pResult, int size) {
-    /* Указатель для хранения вектора, который является
-    результатом суммы
-    произведения матрицы СЛАУ и вектора корней */
     double* pRightPartVector;
 
     int equal = 0;
@@ -293,14 +267,10 @@ void TestResult(double* pMatrix, double* pVector, double* pResult, int size) {
     }
 }
 
-void gauss_solver(int size, double*& matrix, double*& vector) {
-    double* pMatrix;
-    double* pVector;
-    double* pResult;
+void gauss_solver(int size, double*& pMatrix, double*& pVector, double*& pResult) {
     double* pProcRows;
     double* pProcVector;
     double* pProcResult;
-    int size;
     int RowNum;
     double start, finish, duration;
     char* endptr;
@@ -308,12 +278,14 @@ void gauss_solver(int size, double*& matrix, double*& vector) {
 
     setvbuf(stdout, 0, _IONBF, 0);
 
+    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
+    MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
 
     if (ProcRank == 0) {
         t1 = MPI_Wtime();
     }
 
-    size = size * size;
+    // size = size * size;
 
     if (size < 1) {
         if (ProcRank == 0) {
@@ -322,6 +294,7 @@ void gauss_solver(int size, double*& matrix, double*& vector) {
         }
         MPI_Finalize();
     }
+
     if (ProcRank == 0)
         printf("Parallel Gauss algorithm for solving linear systems\n");
 
@@ -330,23 +303,24 @@ void gauss_solver(int size, double*& matrix, double*& vector) {
 
     DataDistribution(pMatrix, pProcRows, pVector, pProcVector, size,
         RowNum);
+
     ParallelResultCalculation(pProcRows, pProcVector, pProcResult,
         size, RowNum);
+
     ResultCollection(pProcResult, pResult);
+
+    TestResult(pMatrix, pVector, pResult, size);
+
     if (ProcRank == 0) {
         t2 = MPI_Wtime();
     }
-    if (size < 11) {
-        TestDistribution(pMatrix, pVector, pProcRows, pResult, size,
-            RowNum);
-    }
-    TestResult(pMatrix, pVector, pResult, size);
+
+    // TestResult(pMatrix, pVector, pResult, size);
     if (ProcRank == 0) {
         printf("\nElapsed time for matrix %d is %f\n", size, t2 - t1);
     }
 
-    ProcessTermination(pMatrix, pVector, pResult, pProcRows, pProcVector, pProcResult);
-    MPI_Finalize();
+    ProcessTermination(pProcRows, pProcVector, pProcResult);
 }
 
 
@@ -454,8 +428,8 @@ void timestamp()
 
 
 int main(int argc, char* argsv[]) {
-    int nx = 150;
-    int ny = 150;
+    int nx = 100;
+    int ny = 100;
 
     double* a;
     double* b;
@@ -476,6 +450,7 @@ int main(int argc, char* argsv[]) {
 
     double qi, rhs, u, wq, xq, yq;
 
+
     const double xl = 0.0;
     const double xr = 1.0;
     const double yb = 0.0;
@@ -484,19 +459,21 @@ int main(int argc, char* argsv[]) {
     double* x;
     double* y;
 
+    node_num = nx * ny;
+    element_num = 2 * (nx - 1) * (ny - 1);
+    element_node = new int[3 * element_num];
+
     timestamp();
 
-    cout << "  Number of nodes =          " << node_num << "\n";
-
     MPI_Init(&argc, &argsv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &ProcRank);
-    MPI_Comm_size(MPI_COMM_WORLD, &ProcNum);
-
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 
 
     if (rank == 0) {
         x = new double[node_num];
         y = new double[node_num];
+
         for (int idx = 0; idx < node_num; idx++) {
             j = 1 + idx / ny;
             i = 1 + idx % ny;
@@ -505,11 +482,8 @@ int main(int argc, char* argsv[]) {
             y[idx] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
         }
 
-        element_num = 2 * (nx - 1) * (ny - 1);
-
+        cout << "  Number of nodes =          " << node_num << "\n";
         cout << "  Number of elements =       " << element_num << "\n";
-
-        element_node = new int[3 * element_num];
 
         k = 0;
 
@@ -526,8 +500,10 @@ int main(int argc, char* argsv[]) {
                 k = k + 1;
             }
         }
+
         a = new double[node_num * node_num];
         b = new double[node_num];
+        c = new double[node_num];
 
         for (i = 0; i < node_num; i++) {
             b[i] = 0.0;
@@ -600,43 +576,51 @@ int main(int argc, char* argsv[]) {
         }
     }
 
-    c = r8ge_fs_new(node_num, a, b);
 
-    cout << "\n";
-    cout << "     K     I     J          X           Y        U               U                Error\n";
-    cout << "                                                 exact           computed\n";
-    cout << "\n";
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    k = 0;
+    // c = r8ge_fs_new(node_num, a, b);
+    gauss_solver(node_num, a, b, c);
 
-    for (j = 1; j <= ny; j++) {
-        for (i = 1; i <= nx; i++) {
-            exact(x[k], y[k], &u, &dudx, &dudy);
-
-            cout << "  " << setw(4) << k
-                << "  " << setw(4) << i
-                << "  " << setw(4) << j
-                << "  " << setw(10) << x[k]
-                << "  " << setw(10) << y[k]
-                << "  " << setw(14) << u
-                << "  " << setw(14) << c[k]
-                << "  " << setw(14) << fabs(u - c[k]) << "\n";
-
-            k = k + 1;
-        }
+    if (rank == 0) {
         cout << "\n";
+        cout << "     K     I     J          X           Y        U               U                Error\n";
+        cout << "                                                 exact           computed\n";
+        cout << "\n";
+
+        k = 0;
+
+        for (j = 1; j <= ny; j++) {
+            for (i = 1; i <= nx; i++) {
+                exact(x[k], y[k], &u, &dudx, &dudy);
+
+                cout << "  " << setw(4) << k
+                    << "  " << setw(4) << i
+                    << "  " << setw(4) << j
+                    << "  " << setw(10) << x[k]
+                    << "  " << setw(10) << y[k]
+                    << "  " << setw(14) << u
+                    << "  " << setw(14) << c[k]
+                    << "  " << setw(14) << fabs(u - c[k]) << "\n";
+
+                k = k + 1;
+            }
+            cout << "\n";
+        }
+        delete[] a;
+        delete[] b;
+        delete[] c;
+        delete[] element_node;
+        delete[] x;
+        delete[] y;
+        cout << "\n";
+        cout << "FEM2D_POISSON_RECTANGLE_LINEAR:\n";
+        cout << "  Normal end of execution.\n";
+        cout << "\n";
+        timestamp();
     }
-    delete[] a;
-    delete[] b;
-    delete[] c;
-    delete[] element_node;
-    delete[] x;
-    delete[] y;
-    cout << "\n";
-    cout << "FEM2D_POISSON_RECTANGLE_LINEAR:\n";
-    cout << "  Normal end of execution.\n";
-    cout << "\n";
-    timestamp();
+
+    MPI_Finalize();
 
     return 0;
 }

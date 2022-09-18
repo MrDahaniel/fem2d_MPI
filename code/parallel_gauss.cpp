@@ -26,7 +26,10 @@ void ProcessInitialization(double*& pMatrix, double*& pVector,
     double*& pProcResult, int& Size, int& RowNum) {
     int RestRows; // Количество строк, которые еще не были распределены
     int i; // Циклическая переменная
+
+    printf("Inside ProcessInitialization rank %d\n size %d\n", ProcRank, Size);
     MPI_Bcast(&Size, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
     RestRows = Size;
     for (i = 0; i < ProcRank; i++)
         RestRows = RestRows - RestRows / (ProcNum - i);
@@ -311,7 +314,10 @@ int main(int argc, char* argv[]) {
     //MPI_Finalize();
     //return 0;
     //}
-    Size = 120 * 120;
+    int nx = 120;
+    int ny = 120;
+
+    Size = nx * ny;
 
     if (Size < 1) {
         if (ProcRank == 0) {
@@ -339,7 +345,7 @@ int main(int argc, char* argv[]) {
         TestDistribution(pMatrix, pVector, pProcRows, pResult, Size,
             RowNum);
     }
-    TestResult(pMatrix, pVector, pResult, Size);
+    // TestResult(pMatrix, pVector, pResult, Size);
     if (ProcRank == 0) {
         printf("\nElapsed time for matrix %d is %f\n", Size, t2 - t1);
     }
