@@ -1,9 +1,10 @@
+#include <mpi.h>
+
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
 #include <iostream>
-#include <mpi.h>
 
 using namespace std;
 
@@ -26,14 +27,13 @@ void RandomDataInitialization(double* pMatrix, double* pVector, int size) {
 }
 
 void ProcessInitialization(double*& pMatrix, double*& pVector,
-    double*& pResult, double*& pProcRows, double*& pProcVector,
-    double*& pProcResult, int& size, int& RowNum) {
+                           double*& pResult, double*& pProcRows, double*& pProcVector,
+                           double*& pProcResult, int& size, int& RowNum) {
     int RestRows;
     int i;
 
     MPI_Bcast(&size, 1, MPI_INT, 0, MPI_COMM_WORLD);
     RestRows = size;
-
 
     for (i = 0; i < ProcRank; i++)
         RestRows = RestRows - RestRows / (ProcNum - i);
@@ -52,7 +52,7 @@ void ProcessInitialization(double*& pMatrix, double*& pVector,
 }
 
 void DataDistribution(double* pMatrix, double* pProcRows, double* pVector,
-    double* pProcVector, int size, int RowNum) {
+                      double* pProcVector, int size, int RowNum) {
     int* pSendNum;
     int* pSendInd;
 
@@ -74,9 +74,9 @@ void DataDistribution(double* pMatrix, double* pProcRows, double* pVector,
     }
 
     MPI_Scatterv(pMatrix, pSendNum, pSendInd, MPI_DOUBLE,
-        pProcRows,
-        pSendNum[ProcRank], MPI_DOUBLE, 0,
-        MPI_COMM_WORLD);
+                 pProcRows,
+                 pSendNum[ProcRank], MPI_DOUBLE, 0,
+                 MPI_COMM_WORLD);
 
     RestRows = size;
     pProcInd[0] = 0;
@@ -87,18 +87,17 @@ void DataDistribution(double* pMatrix, double* pProcRows, double* pVector,
         pProcInd[i] = pProcInd[i - 1] + pProcNum[i - 1];
     }
     MPI_Scatterv(pVector, pProcNum, pProcInd, MPI_DOUBLE,
-        pProcVector,
-        pProcNum[ProcRank], MPI_DOUBLE, 0,
-        MPI_COMM_WORLD);
+                 pProcVector,
+                 pProcNum[ProcRank], MPI_DOUBLE, 0,
+                 MPI_COMM_WORLD);
 
     delete[] pSendNum;
     delete[] pSendInd;
 }
 
 void ResultCollection(double* pProcResult, double* pResult) {
-
     MPI_Gatherv(pProcResult, pProcNum[ProcRank], MPI_DOUBLE, pResult,
-        pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+                pProcNum, pProcInd, MPI_DOUBLE, 0, MPI_COMM_WORLD);
 }
 
 void PrintMatrix(double* pMatrix, int RowCount, int ColCount) {
@@ -125,7 +124,7 @@ void PrintResultVector(double* pResult, int size) {
 }
 
 void ParallelEliminateColumns(double* pProcRows, double* pProcVector,
-    double* pPivotRow, int size, int RowNum, int Iter) {
+                              double* pPivotRow, int size, int RowNum, int Iter) {
     double multiplier;
     for (int i = 0; i < RowNum; i++) {
         if (pProcPivotIter[i] == -1) {
@@ -139,20 +138,21 @@ void ParallelEliminateColumns(double* pProcRows, double* pProcVector,
 }
 
 void ParallelGaussianElimination(double* pProcRows, double* pProcVector,
-    int size, int RowNum) {
+                                 int size, int RowNum) {
     double MaxValue;
     int PivotPos;
-    struct { double MaxValue; int ProcRank; } ProcPivot, Pivot;
-
+    struct {
+        double MaxValue;
+        int ProcRank;
+    } ProcPivot, Pivot;
 
     double* pPivotRow = new double[size + 1];
 
     for (int i = 0; i < size; i++) {
-
         double MaxValue = 0;
         for (int j = 0; j < RowNum; j++) {
             if ((pProcPivotIter[j] == -1) && (MaxValue <
-                fabs(pProcRows[j * size + i]))) {
+                                              fabs(pProcRows[j * size + i]))) {
                 MaxValue = fabs(pProcRows[j * size + i]);
                 PivotPos = j;
             }
@@ -161,31 +161,29 @@ void ParallelGaussianElimination(double* pProcRows, double* pProcVector,
         ProcPivot.ProcRank = ProcRank;
 
         MPI_Allreduce(&ProcPivot, &Pivot, 1, MPI_DOUBLE_INT,
-            MPI_MAXLOC,
-            MPI_COMM_WORLD);
+                      MPI_MAXLOC,
+                      MPI_COMM_WORLD);
 
         if (ProcRank == Pivot.ProcRank) {
             pProcPivotIter[PivotPos] = i;
             pParallelPivotPos[i] = pProcInd[ProcRank] + PivotPos;
         }
         MPI_Bcast(&pParallelPivotPos[i], 1, MPI_INT, Pivot.ProcRank,
-            MPI_COMM_WORLD);
+                  MPI_COMM_WORLD);
         if (ProcRank == Pivot.ProcRank) {
-
             for (int j = 0; j < size; j++) {
                 pPivotRow[j] = pProcRows[PivotPos * size + j];
             }
             pPivotRow[size] = pProcVector[PivotPos];
         }
         MPI_Bcast(pPivotRow, size + 1, MPI_DOUBLE,
-            Pivot.ProcRank, MPI_COMM_WORLD);
+                  Pivot.ProcRank, MPI_COMM_WORLD);
         ParallelEliminateColumns(pProcRows, pProcVector,
-            pPivotRow, size, RowNum, i);
+                                 pPivotRow, size, RowNum, i);
     }
 }
 
-void FindBackPivotRow(int RowIndex, int size, int& IterProcRank, int
-    & IterPivotPos) {
+void FindBackPivotRow(int RowIndex, int size, int& IterProcRank, int& IterPivotPos) {
     for (int i = 0; i < ProcNum - 1; i++) {
         if ((pProcInd[i] <= RowIndex) && (RowIndex < pProcInd[i + 1]))
             IterProcRank = i;
@@ -196,7 +194,7 @@ void FindBackPivotRow(int RowIndex, int size, int& IterProcRank, int
 }
 
 void ParallelBackSubstitution(double* pProcRows, double* pProcVector,
-    double* pProcResult, int size, int RowNum) {
+                              double* pProcResult, int size, int RowNum) {
     int IterProcRank;
     int IterPivotPos;
     double IterResult;
@@ -204,16 +202,16 @@ void ParallelBackSubstitution(double* pProcRows, double* pProcVector,
 
     for (int i = size - 1; i >= 0; i--) {
         FindBackPivotRow(pParallelPivotPos[i], size, IterProcRank,
-            IterPivotPos);
+                         IterPivotPos);
 
         if (ProcRank == IterProcRank) {
             IterResult = pProcVector[IterPivotPos] /
-                pProcRows[IterPivotPos * size + i];
+                         pProcRows[IterPivotPos * size + i];
             pProcResult[IterPivotPos] = IterResult;
         }
 
         MPI_Bcast(&IterResult, 1, MPI_DOUBLE, IterProcRank,
-            MPI_COMM_WORLD);
+                  MPI_COMM_WORLD);
 
         for (int j = 0; j < RowNum; j++)
             if (pProcPivotIter[j] < i) {
@@ -224,11 +222,11 @@ void ParallelBackSubstitution(double* pProcRows, double* pProcVector,
 }
 
 void ParallelResultCalculation(double* pProcRows, double* pProcVector,
-    double* pProcResult, int size, int RowNum) {
+                               double* pProcResult, int size, int RowNum) {
     ParallelGaussianElimination(pProcRows, pProcVector, size,
-        RowNum);
+                                RowNum);
     ParallelBackSubstitution(pProcRows, pProcVector, pProcResult, size,
-        RowNum);
+                             RowNum);
 }
 
 void ProcessTermination(double* pProcRows, double* pProcVector, double* pProcResult) {
@@ -252,7 +250,7 @@ void TestResult(double* pMatrix, double* pVector, double* pResult, int size) {
             pRightPartVector[i] = 0;
             for (int j = 0; j < size; j++) {
                 pRightPartVector[i] += pMatrix[i * size + j] *
-                    pResult[pParallelPivotPos[j]];
+                                       pResult[pParallelPivotPos[j]];
             }
         }
         for (int i = 0; i < size; i++) {
@@ -299,13 +297,13 @@ void gauss_solver(int size, double*& pMatrix, double*& pVector, double*& pResult
         printf("Parallel Gauss algorithm for solving linear systems\n");
 
     ProcessInitialization(pMatrix, pVector, pResult,
-        pProcRows, pProcVector, pProcResult, size, RowNum);
+                          pProcRows, pProcVector, pProcResult, size, RowNum);
 
     DataDistribution(pMatrix, pProcRows, pVector, pProcVector, size,
-        RowNum);
+                     RowNum);
 
     ParallelResultCalculation(pProcRows, pProcVector, pProcResult,
-        size, RowNum);
+                              size, RowNum);
 
     ResultCollection(pProcResult, pResult);
 
@@ -322,8 +320,6 @@ void gauss_solver(int size, double*& pMatrix, double*& pVector, double*& pResult
 
     ProcessTermination(pProcRows, pProcVector, pProcResult);
 }
-
-
 
 void exact(double x, double y, double* u, double* dudx, double* dudy)
 
@@ -426,7 +422,6 @@ void timestamp()
 #undef TIME_SIZE
 }
 
-
 int main(int argc, char* argsv[]) {
     int nx = 100;
     int ny = 100;
@@ -450,7 +445,6 @@ int main(int argc, char* argsv[]) {
 
     double qi, rhs, u, wq, xq, yq;
 
-
     const double xl = 0.0;
     const double xr = 1.0;
     const double yb = 0.0;
@@ -469,6 +463,7 @@ int main(int argc, char* argsv[]) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
 
+    printf("rank %d", rank);
 
     if (rank == 0) {
         x = new double[node_num];
@@ -519,7 +514,7 @@ int main(int argc, char* argsv[]) {
             i2 = element_node[1 + e * 3];
             i3 = element_node[2 + e * 3];
             area = 0.5 *
-                (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
+                   (x[i1] * (y[i2] - y[i3]) + x[i2] * (y[i3] - y[i1]) + x[i3] * (y[i1] - y[i2]));
             for (q1 = 0; q1 < 3; q1++) {
                 q2 = (q1 + 1) % 3;
 
@@ -576,7 +571,6 @@ int main(int argc, char* argsv[]) {
         }
     }
 
-
     MPI_Barrier(MPI_COMM_WORLD);
 
     // c = r8ge_fs_new(node_num, a, b);
@@ -595,13 +589,13 @@ int main(int argc, char* argsv[]) {
                 exact(x[k], y[k], &u, &dudx, &dudy);
 
                 cout << "  " << setw(4) << k
-                    << "  " << setw(4) << i
-                    << "  " << setw(4) << j
-                    << "  " << setw(10) << x[k]
-                    << "  " << setw(10) << y[k]
-                    << "  " << setw(14) << u
-                    << "  " << setw(14) << c[k]
-                    << "  " << setw(14) << fabs(u - c[k]) << "\n";
+                     << "  " << setw(4) << i
+                     << "  " << setw(4) << j
+                     << "  " << setw(10) << x[k]
+                     << "  " << setw(10) << y[k]
+                     << "  " << setw(14) << u
+                     << "  " << setw(14) << c[k]
+                     << "  " << setw(14) << fabs(u - c[k]) << "\n";
 
                 k = k + 1;
             }
