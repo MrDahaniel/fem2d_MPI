@@ -104,9 +104,9 @@ Tenemos 2 opciones para correr nuestro código en Guane-1, de manera interactiva
 La primera requiere los siguientes pasos:
 
 ```console
-$ git clone
+$ git clone https://github.com/mrdahaniel/fem2d_MPI.git
 
-$ cd code
+$ cd fem2d_MPI/code
 
 $ module load devtools/mpi/openmpi/4.0.1
 
@@ -152,8 +152,6 @@ Idealmente escogemos uno que esté en `idle`, y usamos el siguiente script:
 
 module load devtools/mpi/openmpi/4.0.1
 module load devtools/gcc/9.2.0
-
-mpic++ fem2d_poisson_mpi.cpp -o fem2d_mpi.out
 
 mpirun ./fem2d_mpi.out
 ```

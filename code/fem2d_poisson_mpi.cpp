@@ -158,8 +158,8 @@ int main(void) {
 
     int e;
 
-    int nx = 5;
-    int ny = 5;
+    int nx = 150;
+    int ny = 150;
 
     double *a, *local_a;
     double *b, *local_b;

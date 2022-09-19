@@ -74,8 +74,8 @@ int main()
 //    John Burkardt
 //
 {
-    int nx = 40;
-    int ny = 40;
+    int nx = 150;
+    int ny = 150;
 
     double* a;
     double area;
@@ -219,12 +219,6 @@ int main()
             element_node[2 + k * 3] = i + 1 + (j - 1) * nx - 1;
             k = k + 1;
         }
-    }
-
-    printf("element_node\n");
-
-    for (int i = 0; i < element_num; i++) {
-        printf("    element_node[%d] = %d\n", i, element_node[i]);
     }
 
     //
