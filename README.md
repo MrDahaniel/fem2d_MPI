@@ -114,7 +114,50 @@ $ mpic++ -lm fem2d_poisson_mpi.cpp -o fem2d_mpi.out && time mpirun -np 8 fem2d_m
 
 ```
 
-En el caso de querer correrlo de manera pasiva,
+En el caso de querer correrlo de manera pasiva, lo primero es revisar las particiones
+
+```
+$ sinfo --all
+
+PARTITION      AVAIL  TIMELIMIT  NODES  STATE NODELIST
+normal*           up   infinite      1  down* guane04
+normal*           up   infinite      2  drain guane[12,15]
+normal*           up   infinite      2    mix guane[05,16]
+normal*           up   infinite      7  alloc guane[01,03,06,09-10,13-14]
+normal*           up   infinite      2   idle guane[07-08]
+normal*           up   infinite      1   down guane11
+guane_16_cores    up   infinite      1    mix guane05
+guane_16_cores    up   infinite      2  alloc guane[03,06]
+guane_16_CPU      up   infinite      2   idle guane[07-08]
+guane_24_cores    up   infinite      1  down* guane04
+guane_24_cores    up   infinite      2  drain guane[12,15]
+guane_24_cores    up   infinite      1    mix guane16
+guane_24_cores    up   infinite      5  alloc guane[01,09-10,13-14]
+guane_24_cores    up   infinite      1   down guane11
+Viz               up   infinite      1   idle yaje
+deepL             up   infinite      1  alloc felix
+```
+
+Idealmente escogemos uno que esté en `idle`, y usamos el siguiente script:
+
+```
+#!/bin/bash
+#SBATCH --partition=guane_16_CPU
+#SBATCH -o mpi.%j.out       #Nombre del archivo de salida
+#SBATCH -J fem2d_MPI_job    #Nombre del trabajo
+#SBATCH --nodes=1           #Numero de nodos para correr el trabajo
+#SBATCH --ntasks=10         #Numero de procesos
+#SBATCH --tasks-per-node=10   #Numero de trabajos por nodo
+
+#Prepara el ambiente de trabajo
+export I_MPI_PMI_LIBRARY=module load devtools/mpi/openmpi/4.0.1
+ulimit -l unlimited
+export OMPI_MCA_btl=^openib
+
+#Ejecuta el programa paralelo
+srun ./fem2d_poisson_mpi.cpp
+
+```
 
 ## Desarrollo Por
 

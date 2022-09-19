@@ -1,6 +1,5 @@
 #!/bin/bash
-#SBATCH --partition=all     #Seleccione los nodos para el trabajo
-                            # de todos el conjunto de nodos de cómputo del cluster
+#SBATCH --partition=guane_16_CPU
 #SBATCH -o mpi.%j.out       #Nombre del archivo de salida
 #SBATCH -J fem2d_MPI_job    #Nombre del trabajo
 #SBATCH --nodes=1           #Numero de nodos para correr el trabajo
@@ -14,3 +13,4 @@ export OMPI_MCA_btl=^openib
 
 #Ejecuta el programa paralelo
 srun ./fem2d_poisson_mpi.cpp
+
