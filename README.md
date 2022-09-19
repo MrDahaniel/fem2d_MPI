@@ -142,21 +142,25 @@ Idealmente escogemos uno que esté en `idle`, y usamos el siguiente script:
 
 ```
 #!/bin/bash
-#SBATCH --partition=guane_16_CPU
+#SBATCH --partition=normal
 #SBATCH -o mpi.%j.out       #Nombre del archivo de salida
-#SBATCH -J fem2d_MPI_job    #Nombre del trabajo
+#SBATCH -J fem2d_MPI        #Nombre del trabajo
 #SBATCH --nodes=1           #Numero de nodos para correr el trabajo
-#SBATCH --ntasks=10         #Numero de procesos
-#SBATCH --tasks-per-node=10   #Numero de trabajos por nodo
+#SBATCH --ntasks=2         #Numero de procesos
+#SBATCH --tasks-per-node=2   #Numero de trabajos por nodo
 
 #Prepara el ambiente de trabajo
-export I_MPI_PMI_LIBRARY=module load devtools/mpi/openmpi/4.0.1
-ulimit -l unlimited
-export OMPI_MCA_btl=^openib
+#export I_MPI_PMI_LIBRARY=/usr/local/slurm/lib/libpmi.so
+
+module load devtools/mpi/openmpi/4.0.1
+
+# ulimit -l unlimited
+# export OMPI_MCA_btl=^openib
+
+mpic++ fem2d_poisson_mpi.cpp -o fem2d_mpi.out
 
 #Ejecuta el programa paralelo
-srun ./fem2d_poisson_mpi.cpp
-
+mpirun -np 2 --network=Devname=mlx4_0,Devtype=IB ./fem2d_mpi.out
 ```
 
 ## Desarrollo Por
