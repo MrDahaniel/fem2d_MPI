@@ -8,6 +8,8 @@
 
 
 module load devtools/mpi/openmpi/4.0.1
-modele load devtools/gcc/9.2.0
+module load devtools/gcc/9.2.0
 
-mpic++ fem2d_poisson_mpi.cpp -o fem2d_mpi.out && mpirun ./fem2d_mpi.out
+mpic++ fem2d_poisson_mpi.cpp -o fem2d_mpi.out
+
+mpirun ./fem2d_mpi.out

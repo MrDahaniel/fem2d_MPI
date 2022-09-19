@@ -149,18 +149,13 @@ Idealmente escogemos uno que esté en `idle`, y usamos el siguiente script:
 #SBATCH --ntasks=2         #Numero de procesos
 #SBATCH --tasks-per-node=2   #Numero de trabajos por nodo
 
-#Prepara el ambiente de trabajo
-#export I_MPI_PMI_LIBRARY=/usr/local/slurm/lib/libpmi.so
 
 module load devtools/mpi/openmpi/4.0.1
-
-# ulimit -l unlimited
-# export OMPI_MCA_btl=^openib
+module load devtools/gcc/9.2.0
 
 mpic++ fem2d_poisson_mpi.cpp -o fem2d_mpi.out
 
-#Ejecuta el programa paralelo
-mpirun -np 2 --network=Devname=mlx4_0,Devtype=IB ./fem2d_mpi.out
+mpirun ./fem2d_mpi.out
 ```
 
 ## Desarrollo Por
