@@ -99,6 +99,7 @@ void r8ge_fs_new(int n, int lower, int upper, double*& a, double*& b, double*& x
         }
 
         MPI_Win_fence(0, a_window);
+        MPI_Win_fence(0, c_window);
 
         if (rank == 0) {
             t = a[jcol - 1 + (jcol - 1) * n];
@@ -112,19 +113,36 @@ void r8ge_fs_new(int n, int lower, int upper, double*& a, double*& b, double*& x
         }
 
         MPI_Win_fence(0, a_window);
+        MPI_Win_fence(0, c_window);
+        // if (rank == 0) {
 
-        if (rank == 0) {
-            for (i = jcol + 1; i <= n; i++) {
-                if (a[i - 1 + (jcol - 1) * n] != 0.0) {
-                    t = -a[i - 1 + (jcol - 1) * n];
-                    a[i - 1 + (jcol - 1) * n] = 0.0;
-                    for (j = jcol + 1; j <= n; j++) {
-                        a[i - 1 + (j - 1) * n] = a[i - 1 + (j - 1) * n] + t * a[jcol - 1 + (j - 1) * n];
-                    }
-                    x[i - 1] = x[i - 1] + t * x[jcol - 1];
+        MPI_Barrier(MPI_COMM_WORLD);
+
+        for (i = jcol + 1; i <= n; i++) {
+            MPI_Win_sync(a_window);
+            MPI_Win_sync(c_window);
+            if (a[i - 1 + (jcol - 1) * n] != 0.0) {
+                MPI_Win_sync(a_window);
+                t = -a[i - 1 + (jcol - 1) * n];
+                a[i - 1 + (jcol - 1) * n] = 0.0;
+                MPI_Win_sync(a_window);
+
+                for (j = lower + 1; j <= upper - 1; j++) {
+                    a[i - 1 + (j - 1) * n] += t * a[jcol - 1 + (j - 1) * n];
                 }
+
+                MPI_Win_sync(a_window);
+                MPI_Win_sync(c_window);
+
+                x[i - 1] = x[i - 1] + t * x[jcol - 1];
+                MPI_Win_sync(c_window);
             }
+            MPI_Win_sync(a_window);
+            MPI_Win_sync(c_window);
         }
+
+        MPI_Win_fence(0, a_window);
+        MPI_Win_fence(0, c_window);
     }
 
     if (rank == 0) {
