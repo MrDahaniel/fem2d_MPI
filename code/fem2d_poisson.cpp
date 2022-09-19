@@ -74,8 +74,8 @@ int main()
 //    John Burkardt
 //
 {
-    int nx = 150;
-    int ny = 150;
+    int nx = 40;
+    int ny = 40;
 
     double* a;
     double area;
@@ -220,6 +220,13 @@ int main()
             k = k + 1;
         }
     }
+
+    printf("element_node\n");
+
+    for (int i = 0; i < element_num; i++) {
+        printf("    element_node[%d] = %d\n", i, element_node[i]);
+    }
+
     //
     //  Assemble the coefficient matrix A and the right-hand side B of the
     //  finite element equations, ignoring boundary conditions.

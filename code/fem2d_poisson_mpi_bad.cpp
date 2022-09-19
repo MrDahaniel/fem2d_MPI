@@ -116,9 +116,8 @@ void r8ge_fs_new(int n, int lower, int upper, double*& a, double*& b, double*& x
         MPI_Win_fence(0, c_window);
         // if (rank == 0) {
 
-        MPI_Barrier(MPI_COMM_WORLD);
-
         for (i = jcol + 1; i <= n; i++) {
+            MPI_Barrier(MPI_COMM_WORLD);
             MPI_Win_sync(a_window);
             MPI_Win_sync(c_window);
             if (a[i - 1 + (jcol - 1) * n] != 0.0) {

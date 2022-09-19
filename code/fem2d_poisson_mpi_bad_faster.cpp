@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <iostream>
 
-MPI_Win a_window, b_window, c_window, x_window, y_window, e_window;
+MPI_Win a_window, b_window, c_window;
 
 int* evenly_divide(int to_be_divided, int parts, int lower_bound = 0) {
     int i = 1;
@@ -41,7 +41,7 @@ void exact(double x, double y, double* u, double* dudx, double* dudy) {
     return;
 }
 
-void r8ge_fs_new(int n, int lower, int upper, double*& a, double*& b, double*& c) {
+void r8ge_fs_new(int n, int lower, int upper, double*& a, double*& b, double*& x) {
     int i;
     int ipiv, r_ipiv;
     int j;
@@ -77,46 +77,66 @@ void r8ge_fs_new(int n, int lower, int upper, double*& a, double*& b, double*& c
             return;
         }
 
-        if (rank == 0) {
-            if (jcol != ipiv) {
-                for (j = 1; j <= n; j++) {
-                    t = a[jcol - 1 + (j - 1) * n];
-                    a[jcol - 1 + (j - 1) * n] = a[ipiv - 1 + (j - 1) * n];
-                    a[ipiv - 1 + (j - 1) * n] = t;
-                }
-                t = c[jcol - 1];
-                c[jcol - 1] = c[ipiv - 1];
-                c[ipiv - 1] = t;
+        if (jcol != ipiv) {
+            MPI_Win_fence(0, a_window);
+
+            for (j = lower; j <= upper; j++) {
+                t = a[jcol - 1 + (j - 1) * n];
+                a[jcol - 1 + (j - 1) * n] = a[ipiv - 1 + (j - 1) * n];
+                a[ipiv - 1 + (j - 1) * n] = t;
             }
-            //
-            //  Scale the pivot row.
-            //
+
+            MPI_Win_fence(0, a_window);
+            MPI_Win_fence(0, c_window);
+
+            if (rank == 0) {
+                t = x[jcol - 1];
+                x[jcol - 1] = x[ipiv - 1];
+                x[ipiv - 1] = t;
+            }
+
+            MPI_Win_fence(0, c_window);
+        }
+
+        MPI_Win_fence(0, a_window);
+
+        if (rank == 0) {
             t = a[jcol - 1 + (jcol - 1) * n];
             a[jcol - 1 + (jcol - 1) * n] = 1.0;
+
             for (j = jcol + 1; j <= n; j++) {
                 a[jcol - 1 + (j - 1) * n] = a[jcol - 1 + (j - 1) * n] / t;
             }
-            c[jcol - 1] = c[jcol - 1] / t;
-            //
-            //  Use the pivot row to eliminate lower entries in that column.
-            //
-            for (i = jcol + 1; i <= n; i++) {
-                if (a[i - 1 + (jcol - 1) * n] != 0.0) {
-                    t = -a[i - 1 + (jcol - 1) * n];
-                    a[i - 1 + (jcol - 1) * n] = 0.0;
-                    for (j = jcol + 1; j <= n; j++) {
-                        a[i - 1 + (j - 1) * n] = a[i - 1 + (j - 1) * n] + t * a[jcol - 1 + (j - 1) * n];
-                    }
-                    c[i - 1] = c[i - 1] + t * c[jcol - 1];
+
+            x[jcol - 1] = x[jcol - 1] / t;
+        }
+
+        MPI_Win_fence(0, a_window);
+
+        for (i = jcol + 1; i <= n; i++) {
+            if (a[i - 1 + (jcol - 1) * n] != 0.0) {
+                t = -a[i - 1 + (jcol - 1) * n];
+                a[i - 1 + (jcol - 1) * n] = 0.0;
+
+                MPI_Win_sync(a_window);
+
+                for (j = jcol + 1; j <= n; j++) {
+                    a[i - 1 + (j - 1) * n] = a[i - 1 + (j - 1) * n] + t * a[jcol - 1 + (j - 1) * n];
                 }
+
+                MPI_Win_sync(a_window);
+
+                x[i - 1] = x[i - 1] + t * x[jcol - 1];
             }
         }
+
+        MPI_Win_fence(0, a_window);
     }
 
     if (rank == 0) {
         for (jcol = n; 2 <= jcol; jcol--) {
             for (i = 1; i < jcol; i++) {
-                c[i - 1] = c[i - 1] - a[i - 1 + (jcol - 1) * n] * c[jcol - 1];
+                x[i - 1] = x[i - 1] - a[i - 1 + (jcol - 1) * n] * x[jcol - 1];
             }
         }
     }
@@ -152,23 +172,19 @@ int main(void) {
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    double area;
-
-    double dqidx, dqidy, dqjdx, dqjdy, dudx, dudy;
-
-    int e;
-
-    int nx = 5;
-    int ny = 5;
+    int nx = 150;
+    int ny = 150;
 
     double *a, *local_a;
     double *b, *local_b;
     double *c, *local_c;
 
-    double *x, *local_x;
-    double *y, *local_y;
+    double area;
 
-    int *element_node, *local_e;
+    double dqidx, dqidy, dqjdx, dqjdy, dudx, dudy;
+
+    int e;
+    int* element_node;
 
     int node_num = nx * ny;
     int element_num = 2 * (nx - 1) * (ny - 1);
@@ -176,12 +192,10 @@ int main(void) {
     // Initialise shared memory
     int local_matrix_size = 0;
     int local_vector_size = 0;
-    int e_node_size = 0;
 
     if (rank == 0) {
         local_matrix_size = node_num * node_num;
         local_vector_size = node_num;
-        e_node_size = 3 * element_num;
     }
 
     // And allocate those mf
@@ -192,18 +206,10 @@ int main(void) {
     MPI_Win_allocate_shared(local_vector_size * sizeof(double), sizeof(double),
                             MPI_INFO_NULL, MPI_COMM_WORLD, &local_c, &c_window);
 
-    MPI_Win_allocate_shared(local_vector_size * sizeof(double), sizeof(double),
-                            MPI_INFO_NULL, MPI_COMM_WORLD, &local_x, &x_window);
-    MPI_Win_allocate_shared(local_vector_size * sizeof(double), sizeof(double),
-                            MPI_INFO_NULL, MPI_COMM_WORLD, &local_y, &y_window);
-
-    MPI_Win_allocate_shared(e_node_size * sizeof(int), sizeof(int),
-                            MPI_INFO_NULL, MPI_COMM_WORLD, &local_e, &e_window);
-
     int flag;
     int* model;
 
-    MPI_Win_get_attr(e_window, MPI_WIN_MODEL, &model, &flag);
+    MPI_Win_get_attr(a_window, MPI_WIN_MODEL, &model, &flag);
 
     if (1 != flag) {
         printf("Attribute MPI_WIN_MODEL not defined\n");
@@ -222,19 +228,10 @@ int main(void) {
     b = local_b;
     c = local_c;
 
-    x = local_x;
-    y = local_y;
-    element_node = local_e;
-
     if (rank != 0) {
         MPI_Win_shared_query(a_window, 0, &winsize, &windisp, &a);
         MPI_Win_shared_query(b_window, 0, &winsize, &windisp, &b);
         MPI_Win_shared_query(c_window, 0, &winsize, &windisp, &c);
-
-        MPI_Win_shared_query(x_window, 0, &winsize, &windisp, &x);
-        MPI_Win_shared_query(y_window, 0, &winsize, &windisp, &y);
-
-        MPI_Win_shared_query(e_window, 0, &winsize, &windisp, &element_node);
     }
 
     int i, i1, i2, i3, j, j2, k, nq1, nq2, nti1, nti2, nti3, ntj1, ntj2, ntj3;
@@ -249,6 +246,9 @@ int main(void) {
 
     double wq, xq, yq;
 
+    double* x;
+    double* y;
+
     const double pi = 3.141592653589793;
     const double xl = 0.0;
     const double xr = 1.0;
@@ -258,91 +258,63 @@ int main(void) {
     MPI_Win_fence(0, a_window);
     MPI_Win_fence(0, b_window);
     MPI_Win_fence(0, c_window);
-    // std::cout << "\n";
-    // std::cout << "FEM2D_POISSON_RECTANGLE_LINEAR\n";
-    // std::cout << "  C++ version\n";
-    // std::cout << "\n";
-    // std::cout << "  Solution of the Poisson equation:\n";
-    // std::cout << "\n";
-    // std::cout << "  - Uxx - Uyy = F(x,y) inside the region,\n";
-    // std::cout << "       U(x,y) = G(x,y) on the boundary of the region.\n";
-    // std::cout << "\n";
-    // std::cout << "  The region is a rectangle, defined by:\n";
-    // std::cout << "\n";
-    // std::cout << "  " << xl << " = XL<= X <= XR = " << xr << "\n";
-    // std::cout << "  " << yb << " = YB<= Y <= YT = " << yt << "\n";
-    // std::cout << "\n";
-    // std::cout << "  The finite element method is used, with piecewise\n";
-    // std::cout << "  linear basis functions on 3 node triangular\n";
-    // std::cout << "  elements.\n";
-    // std::cout << "\n";
-    // std::cout << "  The corner nodes of the triangles are generated by an\n";
-    // std::cout << "  underlying grid whose dimensions are\n";
-    // std::cout << "\n";
-    // std::cout << "  NX =                       " << nx << "\n";
-    // std::cout << "  NY =                       " << ny << "\n";
-    // std::cout << "  Number of nodes =          " << node_num << "\n";
-    // std::cout << "  Number of elements =       " << element_num << "\n";
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    int* splits = evenly_divide(node_num, size);
-
-    MPI_Win_fence(0, x_window);
-    MPI_Win_fence(0, y_window);
-
-    for (int idx = splits[rank]; idx < splits[rank + 1]; idx++) {
-        j = 1 + idx / ny;
-        i = 1 + idx % ny;
-
-        x[idx] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
-        y[idx] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
-    }
-
-    MPI_Win_fence(0, x_window);
-    MPI_Win_fence(0, y_window);
-
-    MPI_Win_fence(0, e_window);
 
     if (rank == 0) {
+        timestamp();
+        // std::cout << "\n";
+        // std::cout << "FEM2D_POISSON_RECTANGLE_LINEAR\n";
+        // std::cout << "  C++ version\n";
+        // std::cout << "\n";
+        // std::cout << "  Solution of the Poisson equation:\n";
+        // std::cout << "\n";
+        // std::cout << "  - Uxx - Uyy = F(x,y) inside the region,\n";
+        // std::cout << "       U(x,y) = G(x,y) on the boundary of the region.\n";
+        // std::cout << "\n";
+        // std::cout << "  The region is a rectangle, defined by:\n";
+        // std::cout << "\n";
+        // std::cout << "  " << xl << " = XL<= X <= XR = " << xr << "\n";
+        // std::cout << "  " << yb << " = YB<= Y <= YT = " << yt << "\n";
+        // std::cout << "\n";
+        // std::cout << "  The finite element method is used, with piecewise\n";
+        // std::cout << "  linear basis functions on 3 node triangular\n";
+        // std::cout << "  elements.\n";
+        // std::cout << "\n";
+        // std::cout << "  The corner nodes of the triangles are generated by an\n";
+        // std::cout << "  underlying grid whose dimensions are\n";
+        // std::cout << "\n";
+        // std::cout << "  NX =                       " << nx << "\n";
+        // std::cout << "  NY =                       " << ny << "\n";
+        // std::cout << "  Number of nodes =          " << node_num << "\n";
+        // std::cout << "  Number of elements =       " << element_num << "\n";
+
+        x = new double[node_num];
+        y = new double[node_num];
+
+        for (int idx = 0; idx < node_num; idx++) {
+            j = 1 + idx / ny;
+            i = 1 + idx % ny;
+
+            x[idx] = ((double)(nx - i) * xl + (double)(i - 1) * xr) / (double)(nx - 1);
+            y[idx] = ((double)(ny - j) * yb + (double)(j - 1) * yt) / (double)(ny - 1);
+        }
+
+        element_node = new int[3 * element_num];
+
         k = 0;
 
-        for (j = 1; j < ny; j++) {
-            for (i = 1; i < nx; i++) {
+        for (j = 1; j <= ny - 1; j++) {
+            for (i = 1; i <= nx - 1; i++) {
                 element_node[0 + k * 3] = i + (j - 1) * nx - 1;
                 element_node[1 + k * 3] = i + 1 + (j - 1) * nx - 1;
                 element_node[2 + k * 3] = i + j * nx - 1;
                 k = k + 1;
 
-                // printf("rank=%d  k=%d  res=%d\n", rank, k, 2 * (j - 1) + 1 + (j - 1) * nx);
-
                 element_node[0 + k * 3] = i + 1 + j * nx - 1;
                 element_node[1 + k * 3] = i + j * nx - 1;
                 element_node[2 + k * 3] = i + 1 + (j - 1) * nx - 1;
                 k = k + 1;
-                // printf("rank=%d  k=%d  res=%d\n", rank, k, 2 * (j) + (i - 1));
             }
         }
-    }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    MPI_Win_fence(0, e_window);
-
-    // {
-    //     if (rank == 0) {
-    //         printf("element_node\n");
-
-    //         for (int i = 0; i < element_num; i++) {
-    //             printf("    element_node[%d] = %d\n", i, element_node[i]);
-    //         }
-    //     }
-    // }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    if (rank == 0) {
-        timestamp();
 
         // a = new double[node_num * node_num];
         // b = new double[node_num];
@@ -423,15 +395,11 @@ int main(void) {
         }
     }
 
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // printf("here rank %d\n", rank);
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
     MPI_Win_fence(0, a_window);
     MPI_Win_fence(0, b_window);
     MPI_Win_fence(0, c_window);
+
+    int* splits = evenly_divide(node_num, size);
 
     // add 1 to avoid overlaps
     splits[rank] += 1;
@@ -471,28 +439,19 @@ int main(void) {
             std::cout << "\n";
         }
 
+        // delete[] a;
+        // delete[] b;
+        // delete[] c;
+        delete[] element_node;
+        delete[] x;
+        delete[] y;
+
         std::cout << "\n";
         std::cout << "FEM2D_POISSON_RECTANGLE_LINEAR:\n";
         std::cout << "  Normal end of execution.\n";
         std::cout << "\n";
         timestamp();
     }
-
-    MPI_Barrier(MPI_COMM_WORLD);
-
-    // delete[] a;
-    // delete[] b;
-    // delete[] c;
-    // delete[] x;
-    // delete[] y;
-
-    MPI_Win_free(&a_window);
-    MPI_Win_free(&b_window);
-    MPI_Win_free(&c_window);
-
-    MPI_Win_free(&x_window);
-    MPI_Win_free(&y_window);
-    MPI_Win_free(&e_window);
 
     MPI_Finalize();
 
